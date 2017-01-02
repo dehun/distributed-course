@@ -19,6 +19,7 @@ class SimpleBehaviourTest extends FlatSpec with Matchers {
     val ch = new ReliableChannel()
     node1.input.send(ch, IntMessage(42))
     node1.tick(0)
+    node1.processMessages(0)
     assert(ch.receive().get.msg === IntMessage(42))
     assert(ch.receive() === None)
   }

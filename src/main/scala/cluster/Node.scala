@@ -1,7 +1,7 @@
 package cluster
 
 import storage.Storage
-import channel.Channel
+import channel.{Channel, Message}
 
 object Node {
   type NodeId = String
@@ -12,13 +12,17 @@ class Node(val nodeId:Node.NodeId, val input:Channel, var behaviour:NodeBehaviou
 
   def setCluster(cluster:Cluster):Unit = { this.cluster = Some(cluster) }
 
+  def init() = behaviour.init(this)
+
   def tick(time:Int) = {
     behaviour.tick(time, this)
-
-    val msg = input.receive()
-    if (msg.isDefined) {
-      behaviour.onMessage(msg.get.sender, msg.get.msg, this)
-    }
   }
 
+  def processMessages(time:Int) = {
+    var msg = input.receive()
+    while (msg.isDefined) {
+      behaviour.onMessage(msg.get.sender, msg.get.msg, this)
+      msg = input.receive()
+    }
+  }
 }

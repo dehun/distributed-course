@@ -50,9 +50,15 @@ class DoublePhaseCommitSpec extends FlatSpec with Matchers {
     val acceptorNode1 = new Node("acceptor_node1", new ReliableChannel(), new PeerAcceptBehaviour(), new ReliableStorage[Int])
     val acceptorNode2 = new Node("acceptor_node2", new ReliableChannel(), new PeerAcceptBehaviour(), new ReliableStorage[Int])
     val cluster = Cluster.fromNodeList(List(proposerNode1, proposerNode2, acceptorNode1, acceptorNode2))
-    // proposer 1 makes a proposal 42 and acceptors accept it and are waiting for commit
-    List(proposerNode1, acceptorNode1, acceptorNode2).foreach(_.tick(0))
+    // proposer 1 makes a proposal 42
+    List(proposerNode1).foreach(_.tick(0))
+    // acceptors accept it
+    List(acceptorNode1, acceptorNode2).foreach(n => {
+      n.processMessages(0)
+      n.tick(0)
+    })
     // proposer 2 wake ups a bit later on and makes another proposal 13, then rejects proposal from node1
+    proposerNode2.processMessages(0)
     proposerNode2.tick(0)
     // proposer1 and proposer 2 process accept messages and reject messages,
     cluster.tick(1)
@@ -111,14 +117,16 @@ class DoublePhaseCommitSpec extends FlatSpec with Matchers {
     val acceptorNode1 = new Node("acceptor_node1", new ReliableChannel(), new PeerAcceptBehaviour(), new ReliableStorage[Int])
     val acceptorNode2 = new Node("acceptor_node2", new ReliableChannel(), new PeerAcceptBehaviour(), new ReliableStorage[Int])
     val cluster = Cluster.fromNodeList(List(proposerNode, acceptorNode1, acceptorNode2))
-    // proposer sends proposal and gets all accepts
+    // proposer sends proposal
     cluster.tick(0)
+    // proposer gets all accepts
+    cluster.tick(1)
     // one acceptor dies
     acceptorNode1.behaviour = new DeadNodeBehaviour()
     // processing accepts
-    cluster.tick(1)
-    // sending commits
     cluster.tick(2)
+    // sending commits
+    cluster.tick(3)
     // but first acceptor dead and has not handled commit properly
     assert (proposerNode.storage.asList == List(42))
     assert (acceptorNode1.storage.asList == List())  // whops, no value!

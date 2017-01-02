@@ -4,7 +4,7 @@ class DuplicatingChannel(subchannel:Channel, var sendPattern:Stream[Int]) extend
   override def send(sender: Channel, msg: Message): Unit = {
     val h = sendPattern.head
     sendPattern = sendPattern.tail
-    (1 to h).foreach(_ => send(sender, msg))
+    (1 to h).foreach(_ => subchannel.send(sender, msg))
   }
 
   override def receive() = subchannel.receive()

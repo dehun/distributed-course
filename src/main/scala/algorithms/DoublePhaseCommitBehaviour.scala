@@ -100,6 +100,9 @@ object DoublePhaseCommitBehaviour {
         Console.println(s"${node.nodeId} received proposal ${newValue} while in ProposeWaitAcceptsBehaviour")
         sender.send(node.input, RejectMessage())
       }
+
+      case FailMessage() => { // sme other transaction failed, no reaction from us
+      }
     }
   }
 }

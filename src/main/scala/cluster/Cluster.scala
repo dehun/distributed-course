@@ -13,8 +13,12 @@ object Cluster {
 
 class Cluster(val nodes:Map[Node.NodeId, Node]) {
   nodes.foreach(_._2.setCluster(this))
+  nodes.foreach(_._2.init())
+
+  val majorityCount = nodes.size / 2 + 1
 
   def tick(time:Int):Unit = {
+    nodes.values.foreach(_.processMessages(time))
     nodes.values.foreach(_.tick(time))
   }
 
