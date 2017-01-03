@@ -51,4 +51,56 @@ class TriplePhaseCommitSpec extends FlatSpec with Matchers {
     assert (proposerNode.storage.asList == List())
   }
 
+  it should "work witch watchdog when initiator is ok" in {
+    val proposerNode = new Node("proposer_node", new ReliableChannel(), new ProposerStart(42), new ReliableStorage[Int])
+    val acceptorNode1 = new Node("acceptor_node1", new ReliableChannel(), new AcceptorStart(), new ReliableStorage[Int])
+
+    val acceptorNode2 = new Node("acceptor_node2", new ReliableChannel(), new AcceptorStart(), new ReliableStorage[Int])
+    val watchdogNode = new Node("watchdog_node2", new ReliableChannel(), new WatchdogStart(), new ReliableStorage[Int]())
+
+    val cluster = Cluster.fromNodeList(List(proposerNode, acceptorNode1, acceptorNode2, watchdogNode))
+
+    // send proposal
+    cluster.tick(0)
+    // process proposal and send accepts
+    cluster.tick(1)
+    // process accepts and send precommit
+    cluster.tick(2)
+    // process precommit and send commits
+    cluster.tick(3)
+    // handle commits
+    cluster.tick(4)
+    // check that value is arrived at all the nodes
+    assert (acceptorNode1.storage.asList == List(42))
+    assert (acceptorNode2.storage.asList == List(42))
+    assert (proposerNode.storage.asList == List(42))
+    // and watchdog does not save anything in our scenario, but it technically can
+  }
+
+  it should "work witch watchdog when initiator dies" in {
+    val proposerNode = new Node("proposer_node", new ReliableChannel(), new ProposerStart(42), new ReliableStorage[Int])
+    val acceptorNode1 = new Node("acceptor_node1", new ReliableChannel(), new AcceptorStart(), new ReliableStorage[Int])
+
+    val acceptorNode2 = new Node("acceptor_node2", new ReliableChannel(), new AcceptorStart(), new ReliableStorage[Int])
+    val watchdogNode = new Node("watchdog_node2", new ReliableChannel(), new WatchdogStart(), new ReliableStorage[Int]())
+
+    val cluster = Cluster.fromNodeList(List(proposerNode, acceptorNode1, acceptorNode2, watchdogNode))
+
+    // send proposal
+    cluster.tick(0)
+    // process proposal and send accepts
+    cluster.tick(1)
+    // process accepts and send precommit
+    cluster.tick(2)
+    // kill proposer
+    proposerNode.behaviour = new DeadNodeBehaviour()
+    // trigger watchdog
+    (4 to 50).foreach(cluster.tick)
+    // check that value is arrived at all the nodes
+    assert (acceptorNode1.storage.asList == List(42))
+    assert (acceptorNode2.storage.asList == List(42))
+    assert (proposerNode.storage.asList == List()) // because it was dead
+    // and watchdog does not save anything in our scenario, but it technically can
+  }
+
 }
