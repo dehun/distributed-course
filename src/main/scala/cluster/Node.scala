@@ -21,7 +21,7 @@ class Node(val nodeId:Node.NodeId, val input:Channel, var behaviour:NodeBehaviou
   def processMessages(time:Int) = {
     var msg = input.receive()
     while (msg.isDefined) {
-      behaviour.onMessage(msg.get.sender, msg.get.msg, this)
+      behaviour.onMessage(msg.get.sender, msg.get.msg, this, time)
       msg = input.receive()
     }
   }

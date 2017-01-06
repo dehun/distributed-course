@@ -21,7 +21,7 @@ object DoublePhaseCommitBehaviour {
   case class FailMessage() extends Message
 
   class PeerAcceptBehaviour extends NodeBehaviour {
-    override def onMessage(sender: Channel, msg: Message, node: Node): Unit = msg match {
+    override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
       case ProposeMessage(value) => {
         Console.println(s"${node.nodeId} accepting proposal ${value}")
         node.behaviour = new PeerWaitForCommitBehaviour(value)
@@ -31,7 +31,7 @@ object DoublePhaseCommitBehaviour {
   }
 
   class PeerWaitForCommitBehaviour(value: Int) extends NodeBehaviour {
-    override def onMessage(sender: Channel, msg: Message, node: Node): Unit = msg match {
+    override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
       case CommitMessage() => {
         Console.println(s"${node.nodeId} commiting proposal ${value}")
         node.behaviour = new PeerAcceptBehaviour()
@@ -51,7 +51,7 @@ object DoublePhaseCommitBehaviour {
   }
 
   class PeerRejectBehaviour extends NodeBehaviour {
-    override def onMessage(sender: Channel, msg: Message, node: Node): Unit = msg match {
+    override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
       case ProposeMessage(value) => {
         Console.println(s"${node.nodeId} rejecting proposal ${value}")
         sender.send(node.input, RejectMessage())
@@ -64,7 +64,7 @@ object DoublePhaseCommitBehaviour {
   }
 
   class ProposeStartBehaviour(value: Int) extends NodeBehaviour {
-    override def onMessage(sender: Channel, msg: Message, node: Node): Unit = {
+    override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = {
       Console.println(s"${node.nodeId} in proposer start state received message ${msg.toString()}. ignoring")
     }
 
@@ -76,7 +76,7 @@ object DoublePhaseCommitBehaviour {
   }
 
   class ProposeWaitAcceptsBehaviour(acksToCommit: Int, value:Int) extends NodeBehaviour {
-    override def onMessage(sender: Channel, msg: Message, node: Node): Unit = msg match {
+    override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
       case AcceptMessage() => {
         if (acksToCommit > 1) {
           Console.println(s"${node.nodeId} received accept, ${acksToCommit - 1} to go")

@@ -17,7 +17,7 @@ object DhtBehaviour extends {
 
   object Behaviours {
     class Client(valuesToStore:Stream[Int], backendNodes:List[Node]) extends NodeBehaviour {
-      override def onMessage(sender: Channel, msg: Message, node: Node): Unit = {}
+      override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = {}
       override def tick(time: Int, node: Node): Unit = {
         // feed values to random nodes one by one
         if (valuesToStore.size > 0) {
@@ -34,7 +34,7 @@ object DhtBehaviour extends {
                          backendNodes:List[Node]) extends NodeBehaviour {
       var results:Set[QueryResult] = Set.empty
 
-      override def onMessage(sender: Channel, msg: Message, node: Node): Unit = msg match {
+      override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
         case Messages.QueryFound(value, where) => {
           results += QueryResult(value, Some(where))
         } case Messages.QueryNotFound(value) => {
@@ -65,7 +65,7 @@ object DhtBehaviour extends {
         backendNodes.get(value % backendNodes.get.size)
       }
 
-      override def onMessage(sender: Channel, msg: Message, node: Node): Unit = msg match {
+      override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
         case Messages.Store(value) => {
           val backendNode = pickBackendNode(value)
           if (node.eq(backendNode)) {

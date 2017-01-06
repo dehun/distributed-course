@@ -19,7 +19,7 @@ object GossipBehaviour  {
     var nodesToGossipOnNextTick = initialNodes // when we start we want to gossip about our startup nodes
     var knowledge:Map[String, Set[String]] = Map()
 
-    override def onMessage(sender: Channel, msg: Message, node: Node): Unit = msg match {
+    override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
       case Messages.Gossip(newNodes, sender) => {
         nodesToGossipOnNextTick ++= newNodes
         knowledge = knowledge.updated(sender, knowledge.getOrElse(sender, Set()) ++ newNodes)
@@ -50,7 +50,7 @@ object GossipBehaviour  {
     // on every tick we are going to replicate to all known nodes the nodes unknown to particular node
     // we are considering nodes to be known to other node only if node send it to us
 
-    override def onMessage(sender: Channel, msg: Message, node: Node): Unit = msg match {
+    override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
       case Messages.Gossip(nodes, sender) => {
         knowledge = knowledge.updated(node.nodeId, knowledge.getOrElse(node.nodeId, Set()) ++ nodes + sender)
         knowledge = knowledge.updated(sender, knowledge.getOrElse(sender, Set()) ++ nodes + node.nodeId)

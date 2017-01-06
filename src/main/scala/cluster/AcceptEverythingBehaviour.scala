@@ -5,7 +5,7 @@ import storage.Storage
 case class IntMessage(value:Int) extends Message
 
 class AcceptEverythingBehaviour extends NodeBehaviour {
-  override def onMessage(sender: Channel, msg: Message, node: Node): Unit = {
+  override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = {
     msg match {
       case im: IntMessage => node.storage.put(im.value)
       case _ => ???

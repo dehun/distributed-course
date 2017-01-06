@@ -19,23 +19,22 @@ object TriplePhaseCommitBehaviour {
   object Behaviours {
     // proposer
     class ProposerStart(proposal:Int) extends NodeBehaviour {
-      override def onMessage(sender: Channel, msg: Message, node: Node): Unit = ???
+      override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = ???
       override def tick(time: Int, node: Node): Unit = {
         node.behaviour = new ProposerWaitForAccepts(proposal, node.cluster.get.nodes.size - 1)
-        node.cluster.get.multicastExceptMe(node, new Messages.Propose(proposal, node.nodeId))
+        node.cluster.get.multicastExceptMe(node, Messages.Propose(proposal, node.nodeId))
       }
     }
 
     class ProposerWaitForAccepts(value:Int, acksToPreCommit:Int) extends NodeBehaviour {
-      override def onMessage(sender: Channel, msg: Message, node: Node): Unit = msg match {
-        case Messages.Accept() => {
+      override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
+        case Messages.Accept() =>
           if (acksToPreCommit > 1) {
             node.behaviour = new ProposerWaitForAccepts(value, acksToPreCommit - 1)
           } else {
             node.behaviour = new ProposerWaitForPreCommitAcks(value, node.cluster.get.nodes.size - 1)
             node.cluster.get.multicastExceptMe(node, Messages.PreCommit())
           }
-        }
 
         case Messages.Reject() => {
           node.behaviour = new DeadNodeBehaviour()
@@ -45,14 +44,14 @@ object TriplePhaseCommitBehaviour {
     }
 
     class ProposerWaitForPreCommitAcks(value:Int, acksToCommit:Int) extends NodeBehaviour {
-      override def onMessage(sender: Channel, msg: Message, node: Node): Unit = msg match {
-        case Messages.PreCommitAck() => {
+      override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
+        case Messages.PreCommitAck() =>
           if (acksToCommit > 1) {
             node.behaviour = new ProposerWaitForPreCommitAcks(value, acksToCommit - 1)
           } else {
             node.behaviour = new ProposerCommits(value)
           }
-        }
+
 
         case Messages.Heartbeat() => {
           sender.send(node.input, Messages.Heartbeat())
@@ -67,7 +66,7 @@ object TriplePhaseCommitBehaviour {
         node.behaviour = new JustHeartbeats()
       }
 
-      override def onMessage(sender: Channel, msg: Message, node: Node): Unit = msg match {
+      override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
         case Messages.Heartbeat() => {
           sender.send(node.input, Messages.Heartbeat())
         }
@@ -75,7 +74,7 @@ object TriplePhaseCommitBehaviour {
     }
 
     class JustHeartbeats extends NodeBehaviour {
-      override def onMessage(sender: Channel, msg: Message, node: Node): Unit = msg match {
+      override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
         case Messages.Heartbeat() => {
           sender.send(node.input, Messages.Heartbeat())
         }
@@ -84,7 +83,7 @@ object TriplePhaseCommitBehaviour {
 
     // acceptor
     class AcceptorStart extends NodeBehaviour {
-      override def onMessage(sender: Channel, msg: Message, node: Node): Unit = msg match {
+      override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
         case Messages.Propose(value, initiator) => {
           node.behaviour = new AcceptorWaitForPreCommit(value)
           sender.send(node.input, Messages.Accept())
@@ -93,7 +92,7 @@ object TriplePhaseCommitBehaviour {
     }
 
     class AcceptorWaitForPreCommit(value:Int) extends NodeBehaviour {
-      override def onMessage(sender: Channel, msg: Message, node: Node): Unit = msg match {
+      override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
         case Messages.PreCommit() => {
           node.behaviour = new AcceptorWaitForCommit(value)
           sender.send(node.input, Messages.PreCommitAck())
@@ -106,7 +105,7 @@ object TriplePhaseCommitBehaviour {
     }
 
     class AcceptorWaitForCommit(value:Int) extends NodeBehaviour {
-      override def onMessage(sender: Channel, msg: Message, node: Node): Unit = msg match {
+      override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
         case Messages.Commit() => {
           node.behaviour = new DeadNodeBehaviour()
           node.storage.put(value)
@@ -115,7 +114,7 @@ object TriplePhaseCommitBehaviour {
     }
 
     class RejectorStart extends NodeBehaviour {
-      override def onMessage(sender: Channel, msg: Message, node: Node): Unit = msg match {
+      override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
         case Messages.Propose(_, _) => {
           sender.send(node.input, Messages.Reject())
         }
@@ -126,7 +125,7 @@ object TriplePhaseCommitBehaviour {
 
     // watchdog
     class WatchdogStart extends NodeBehaviour {
-      override def onMessage(sender: Channel, msg: Message, node: Node): Unit = msg match {
+      override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
         case Messages.Propose(_, initiator) => {
           node.behaviour = new WatchdogWatchVote(initiator)
           sender.send(node.input, Messages.Accept())
@@ -135,7 +134,7 @@ object TriplePhaseCommitBehaviour {
     }
 
     class WatchdogWatchVote(initiator:String) extends NodeBehaviour {
-      override def onMessage(sender: Channel, msg: Message, node: Node): Unit = msg match {
+      override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
         case Messages.Fail() => {
           // nothing to do, vote failed, this was delivered to the rest of the nodes in case of reliable network
           node.behaviour = new DeadNodeBehaviour()
@@ -152,7 +151,7 @@ object TriplePhaseCommitBehaviour {
       var timeWithoutHeartbeat = 0
       val heartbeatInterval = 3
       val heartbeatThreshold = 10
-      override def onMessage(sender: Channel, msg: Message, node: Node): Unit = msg match {
+      override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
         case Messages.Heartbeat() => {
           timeWithoutHeartbeat = 0
         }

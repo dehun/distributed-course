@@ -3,7 +3,7 @@ import channel.{Channel, Message}
 import storage.Storage
 
 class EchoBehaviour extends NodeBehaviour {
-  override def onMessage(sender: Channel, msg: Message, node: Node): Unit = {
+  override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = {
     sender.send(sender, msg)
   }
 
