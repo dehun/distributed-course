@@ -81,4 +81,35 @@ class GossipBehaviourSpec extends FlatSpec with Matchers {
     assert(cluster.nodes.values.forall(n => n.behaviour.asInstanceOf[ReliableGossipBehaviour].knowledge(n.nodeId) === nodeNames.toSet))
   }
 
+  it should "gossiping over unreliable channel requires different approach. spanning tree" in {
+    def spawnNode(name:String, knows:Set[String]) = new Node(name,
+      new DroppingChannel(new ReliableChannel(),Stream.iterate(Random.nextBoolean())((_:Boolean) => Random.nextBoolean())), // 50% chance of drop
+      new ReliableGossipBehaviour(knows), // we are using special gossiping behaviour
+      new ReliableStorage[Int]())
+    val nodeNames = Set("A", "B", "C", "D", "E", "F", "G", "H")
+    //  A           E - H
+    //     \      /
+    //      C - D
+    //     /     \
+    //  B         F - G
+
+    val cluster = Cluster.fromNodeList(List(
+      spawnNode("A", Set("A", "C")),
+      spawnNode("B", Set("B", "C")),
+      spawnNode("C", Set("C", "A", "B", "D")),
+      spawnNode("D", Set("D", "E", "F", "C")),
+      spawnNode("E", Set("E", "D", "H")),
+      spawnNode("H", Set("H", "E")),
+      spawnNode("F", Set("F", "D", "G")),
+      spawnNode("G", Set("G", "F"))))
+
+    (1 to 500).foreach(cluster.tick)
+    // all nodes know each other
+    assert(cluster.nodes.values.forall(n => n.behaviour.asInstanceOf[ReliableGossipBehaviour].knowledge(n.nodeId) === nodeNames))
+    // no more messages needed
+    val previousMessagesCount = Messages.Gossip.instantiations
+    cluster.tick(501)
+    assert (Messages.Gossip.instantiations === previousMessagesCount)
+  }
+
 }

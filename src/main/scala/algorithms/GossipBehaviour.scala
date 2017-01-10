@@ -1,5 +1,6 @@
 package algorithms
 
+import algorithms.GossipBehaviour.Messages.GossipAck
 import channel.{Channel, Message}
 import cluster.{Node, NodeBehaviour}
 
@@ -9,15 +10,17 @@ object GossipBehaviour  {
     object Gossip {
       var instantiations:Int = 0
     }
-    case class Gossip(nodes:Set[String], sender:String) extends Message {
+    case class Gossip(nodes:Set[Node.NodeId], sender:Node.NodeId) extends Message {
       Gossip.instantiations += 1
     }
+
+    case class GossipAck(nodes:Set[Node.NodeId], acker:Node.NodeId) extends Message {}
   }
 
 
-  class GossipBehaviour(var initialNodes:Set[String]) extends NodeBehaviour {
+  class GossipBehaviour(var initialNodes:Set[Node.NodeId]) extends NodeBehaviour {
     var nodesToGossipOnNextTick = initialNodes // when we start we want to gossip about our startup nodes
-    var knowledge:Map[String, Set[String]] = Map()
+    var knowledge:Map[Node.NodeId, Set[Node.NodeId]] = Map()
 
     override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
       case Messages.Gossip(newNodes, sender) => {
@@ -40,20 +43,23 @@ object GossipBehaviour  {
     }
   }
 
-  class ReliableGossipBehaviour(val initialNodes:Set[String]) extends NodeBehaviour {
-    var knowledge:Map[String, Set[String]] = Map()
+  class ReliableGossipBehaviour(val initialNodes:Set[Node.NodeId]) extends NodeBehaviour {
+    var knowledge:Map[Node.NodeId, Set[Node.NodeId]] = Map()
 
     override def init(node: Node): Unit = {
       knowledge = knowledge.updated(node.nodeId, initialNodes)
     }
 
     // on every tick we are going to replicate to all known nodes the nodes unknown to particular node
-    // we are considering nodes to be known to other node only if node send it to us
-
+    // we are considering nodes to be known to other node only if node send ack to us
     override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
-      case Messages.Gossip(nodes, sender) => {
-        knowledge = knowledge.updated(node.nodeId, knowledge.getOrElse(node.nodeId, Set()) ++ nodes + sender)
-        knowledge = knowledge.updated(sender, knowledge.getOrElse(sender, Set()) ++ nodes + node.nodeId)
+      case Messages.Gossip(nodes, senderId) => {
+        knowledge = knowledge.updated(node.nodeId, knowledge.getOrElse(node.nodeId, Set()) ++ nodes + senderId)
+        sender.send(node.input, Messages.GossipAck(nodes, node.nodeId))
+      }
+
+      case GossipAck(nodes, acker) => {
+        knowledge = knowledge.updated(acker, knowledge.getOrElse(acker, Set()) ++ nodes)
       }
     }
 
