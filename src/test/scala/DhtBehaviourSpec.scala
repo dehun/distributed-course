@@ -13,7 +13,7 @@ class DhtBehaviourSpec extends FlatSpec with Matchers {
     val clientNode = new Node("client_node", new ReliableChannel(),
       new Behaviours.Client(valuesToStore toStream, backendNodes),
       new ReliableStorage[Int])
-    val cluster = Cluster.fromNodeList(clientNode :: backendNodes)
+    val cluster = Cluster.fromNodes(clientNode :: backendNodes)
     // tick cluster - client will need around 100 ticks to send all data
     (1 to 200).foreach(cluster.tick)
     // check that we have all values evenly distributed
@@ -29,7 +29,7 @@ class DhtBehaviourSpec extends FlatSpec with Matchers {
     val clientNode = new Node("client_node", new ReliableChannel(),
       new Behaviours.Client(valuesToStore toStream, backendNodes),
       new ReliableStorage[Int])
-    val cluster = Cluster.fromNodeList(clientNode :: backendNodes)
+    val cluster = Cluster.fromNodes(clientNode :: backendNodes)
     // tick cluster - client will need around 100 ticks to send all data
     (1 to 200).foreach(cluster.tick)
     // check that we have all values evenly distributed

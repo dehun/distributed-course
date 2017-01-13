@@ -11,7 +11,7 @@ class TriplePhaseCommitSpec extends FlatSpec with Matchers {
     val proposerNode = new Node("proposer_node", new ReliableChannel(), new ProposerStart(42), new ReliableStorage[Int])
     val acceptorNode1 = new Node("acceptor_node1", new ReliableChannel(), new AcceptorStart(), new ReliableStorage[Int])
     val acceptorNode2 = new Node("acceptor_node2", new ReliableChannel(), new AcceptorStart(), new ReliableStorage[Int])
-    val cluster = Cluster.fromNodeList(List(proposerNode, acceptorNode1, acceptorNode2))
+    val cluster = Cluster.fromNodes(List(proposerNode, acceptorNode1, acceptorNode2))
 
     // send proposal
     cluster.tick(0)
@@ -33,7 +33,7 @@ class TriplePhaseCommitSpec extends FlatSpec with Matchers {
     val proposerNode = new Node("proposer_node", new ReliableChannel(), new ProposerStart(42), new ReliableStorage[Int])
     val acceptorNode1 = new Node("acceptor_node1", new ReliableChannel(), new AcceptorStart(), new ReliableStorage[Int])
     val acceptorNode2 = new Node("acceptor_node2", new ReliableChannel(), new RejectorStart(), new ReliableStorage[Int])
-    val cluster = Cluster.fromNodeList(List(proposerNode, acceptorNode1, acceptorNode2))
+    val cluster = Cluster.fromNodes(List(proposerNode, acceptorNode1, acceptorNode2))
 
     // send proposal
     cluster.tick(0)
@@ -58,7 +58,7 @@ class TriplePhaseCommitSpec extends FlatSpec with Matchers {
     val acceptorNode2 = new Node("acceptor_node2", new ReliableChannel(), new AcceptorStart(), new ReliableStorage[Int])
     val watchdogNode = new Node("watchdog_node2", new ReliableChannel(), new WatchdogStart(), new ReliableStorage[Int]())
 
-    val cluster = Cluster.fromNodeList(List(proposerNode, acceptorNode1, acceptorNode2, watchdogNode))
+    val cluster = Cluster.fromNodes(List(proposerNode, acceptorNode1, acceptorNode2, watchdogNode))
 
     // send proposal
     cluster.tick(0)
@@ -84,7 +84,7 @@ class TriplePhaseCommitSpec extends FlatSpec with Matchers {
     val acceptorNode2 = new Node("acceptor_node2", new ReliableChannel(), new AcceptorStart(), new ReliableStorage[Int])
     val watchdogNode = new Node("watchdog_node2", new ReliableChannel(), new WatchdogStart(), new ReliableStorage[Int]())
 
-    val cluster = Cluster.fromNodeList(List(proposerNode, acceptorNode1, acceptorNode2, watchdogNode))
+    val cluster = Cluster.fromNodes(List(proposerNode, acceptorNode1, acceptorNode2, watchdogNode))
 
     // send proposal
     cluster.tick(0)

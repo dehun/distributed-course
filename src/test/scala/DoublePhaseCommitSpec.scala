@@ -10,7 +10,7 @@ class DoublePhaseCommitSpec extends FlatSpec with Matchers {
     val proposerNode = new Node("proposer_node", new ReliableChannel(), new ProposeStartBehaviour(42), new ReliableStorage[Int])
     val acceptorNode1 = new Node("acceptor_node1", new ReliableChannel(), new PeerAcceptBehaviour(), new ReliableStorage[Int])
     val acceptorNode2 = new Node("acceptor_node2", new ReliableChannel(), new PeerAcceptBehaviour(), new ReliableStorage[Int])
-    val cluster = Cluster.fromNodeList(List(proposerNode, acceptorNode1, acceptorNode2))
+    val cluster = Cluster.fromNodes(List(proposerNode, acceptorNode1, acceptorNode2))
     // proposer proposes here
     cluster.tick(0)
     // we should have propose messages delivered here, lets process
@@ -29,7 +29,7 @@ class DoublePhaseCommitSpec extends FlatSpec with Matchers {
     val proposerNode = new Node("proposer_node", new ReliableChannel(), new ProposeStartBehaviour(42), new ReliableStorage[Int])
     val acceptorNode1 = new Node("acceptor_node1", new ReliableChannel(), new PeerAcceptBehaviour(), new ReliableStorage[Int])
     val acceptorNode2 = new Node("acceptor_node2", new ReliableChannel(), new PeerRejectBehaviour(), new ReliableStorage[Int])
-    val cluster = Cluster.fromNodeList(List(proposerNode, acceptorNode1, acceptorNode2))
+    val cluster = Cluster.fromNodes(List(proposerNode, acceptorNode1, acceptorNode2))
     // proposer proses here
     cluster.tick(0)
     // propose messages delivered, lets process
@@ -49,7 +49,7 @@ class DoublePhaseCommitSpec extends FlatSpec with Matchers {
     val proposerNode2 = new Node("proposer_node_2", new ReliableChannel(), new ProposeStartBehaviour(13), new ReliableStorage[Int]) // TODO: use slow channel instead
     val acceptorNode1 = new Node("acceptor_node1", new ReliableChannel(), new PeerAcceptBehaviour(), new ReliableStorage[Int])
     val acceptorNode2 = new Node("acceptor_node2", new ReliableChannel(), new PeerAcceptBehaviour(), new ReliableStorage[Int])
-    val cluster = Cluster.fromNodeList(List(proposerNode1, proposerNode2, acceptorNode1, acceptorNode2))
+    val cluster = Cluster.fromNodes(List(proposerNode1, proposerNode2, acceptorNode1, acceptorNode2))
     // proposer 1 makes a proposal 42
     List(proposerNode1).foreach(_.tick(0))
     // acceptors accept it
@@ -75,7 +75,7 @@ class DoublePhaseCommitSpec extends FlatSpec with Matchers {
     val proposerNode = new Node("proposer_node", new ReliableChannel(), new ProposeStartBehaviour(42), new ReliableStorage[Int])
     val acceptorNode1 = new Node("acceptor_node1", new ReliableChannel(), new PeerAcceptBehaviour(), new ReliableStorage[Int])
     val acceptorNode2 = new Node("acceptor_node2", new ReliableChannel(), new PeerAcceptBehaviour(), new ReliableStorage[Int])
-    val cluster = Cluster.fromNodeList(List(proposerNode, acceptorNode1, acceptorNode2))
+    val cluster = Cluster.fromNodes(List(proposerNode, acceptorNode1, acceptorNode2))
     // proposer sends proposal and dies
     cluster.tick(0)
     proposerNode.behaviour = new DeadNodeBehaviour()
@@ -98,7 +98,7 @@ class DoublePhaseCommitSpec extends FlatSpec with Matchers {
     val proposerNode = new Node("proposer_node", new ReliableChannel(), new ProposeStartBehaviour(42), new ReliableStorage[Int])
     val acceptorNode1 = new Node("acceptor_node1", new ReliableChannel(), new PeerAcceptBehaviour(), new ReliableStorage[Int])
     val acceptorNode2 = new Node("acceptor_node2", new ReliableChannel(), new PeerAcceptBehaviour(), new ReliableStorage[Int])
-    val cluster = Cluster.fromNodeList(List(proposerNode, acceptorNode1, acceptorNode2))
+    val cluster = Cluster.fromNodes(List(proposerNode, acceptorNode1, acceptorNode2))
     // proposer sends proposal
     proposerNode.tick(0)
     // one acceptor dies
@@ -116,7 +116,7 @@ class DoublePhaseCommitSpec extends FlatSpec with Matchers {
     val proposerNode = new Node("proposer_node", new ReliableChannel(), new ProposeStartBehaviour(42), new ReliableStorage[Int])
     val acceptorNode1 = new Node("acceptor_node1", new ReliableChannel(), new PeerAcceptBehaviour(), new ReliableStorage[Int])
     val acceptorNode2 = new Node("acceptor_node2", new ReliableChannel(), new PeerAcceptBehaviour(), new ReliableStorage[Int])
-    val cluster = Cluster.fromNodeList(List(proposerNode, acceptorNode1, acceptorNode2))
+    val cluster = Cluster.fromNodes(List(proposerNode, acceptorNode1, acceptorNode2))
     // proposer sends proposal
     cluster.tick(0)
     // proposer gets all accepts

@@ -5,11 +5,10 @@ import cluster.Node.NodeId
 
 
 object Cluster {
-  def fromNodeList(nodes:List[Node]):Cluster = {
+  def fromNodes(nodes:Seq[Node]):Cluster = {
     new Cluster(nodes.map(n => n.nodeId -> n).toMap)
   }
 }
-
 
 class Cluster(val nodes:Map[Node.NodeId, Node]) {
   nodes.foreach(_._2.setCluster(this))
