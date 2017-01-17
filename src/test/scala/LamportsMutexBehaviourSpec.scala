@@ -11,7 +11,7 @@ class LamportsMutexBehaviourSpec extends FlatSpec with Matchers {
 
     val lockers = MutableList[(Int, Node.NodeId)]()
 
-    val nodes = (1 to 2).map(nid =>
+    val nodes = (1 to 20).map(nid =>
       new Node("node_" + nid,
         new ReliableChannel(),
         new Mutex((time:Int, node:Node) => { lockers += ((time, node.nodeId)) },

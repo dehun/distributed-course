@@ -20,14 +20,14 @@ object LamportsMutex {
     override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
       case lmmsg:LmMessage => {
         ourLmstamp = Math.max(ourLmstamp, lmmsg.lmstamp) + 1
-        Console.println(s"${node.nodeId} got ${lmmsg.op} with stamp ${lmmsg.lmstamp}, our lmstamp is ${ourLmstamp}")
+        Console.println(s"${node.nodeId} at time ${time} got ${lmmsg.op} with stamp ${lmmsg.lmstamp}, our lmstamp is ${ourLmstamp}")
         onLmMessage(sender, lmmsg, node, time)
       }
     }
 
-    def lmsend(senderId:Node.NodeId, from:Channel, to:Channel, op:LmOp) = {
+    def lmsend(senderId:Node.NodeId, from:Channel, to:Channel, op:LmOp, time:Int) = {
       ourLmstamp += 1
-      Console.println(s"${senderId} sending ${op} with stamp ${ourLmstamp}")
+      Console.println(s"${senderId} at time ${time} sending ${op} with stamp ${ourLmstamp}")
       to.send(from, LmMessage(ourLmstamp, senderId, op))
     }
   }
@@ -42,7 +42,7 @@ object LamportsMutex {
       msg.op match {
         case Messages.RequestOp() => {
           requestQueue += LockRequest(msg.lmstamp, msg.senderId)
-          lmsend(node.nodeId, node.input, sender, Messages.ReplyOp())
+          lmsend(node.nodeId, node.input, sender, Messages.ReplyOp(), time)
         }
         case Messages.ReplyOp() => { }
         case Messages.ReleaseOp() =>
@@ -51,15 +51,17 @@ object LamportsMutex {
     }
 
     override def tick(time: Int, node: Node): Unit = {
-      lock(node)
+      lock(node, time)
     }
 
-    private def lock(node:Node) = {
+    private def lock(node:Node, time:Int) = {
       val otherNodes = node.cluster.get.nodes.values.filterNot(_.eq(node))
+      ourLmstamp += 1
       otherNodes.foreach((n) => {
-        lmsend(node.nodeId, node.input, n.input, Messages.RequestOp())
+        n.input.send(node.input, LmMessage(ourLmstamp, node.nodeId, Messages.RequestOp()))
       })
       requestQueue = requestQueue + LockRequest(ourLmstamp, node.nodeId)
+
       node.behaviour = new MutexLocker(onLock, ourLmstamp, requestQueue,
         otherNodes.map(_.nodeId).toSet)
     }
@@ -81,7 +83,7 @@ object LamportsMutex {
 
         case Messages.RequestOp() => {
           requestQueue += LockRequest(msg.lmstamp, msg.senderId)
-          lmsend(node.nodeId, node.input, sender, Messages.ReplyOp())
+          lmsend(node.nodeId, node.input, sender, Messages.ReplyOp(), time)
         }
 
         case Messages.ReleaseOp() => {
@@ -91,17 +93,20 @@ object LamportsMutex {
     }
 
     override def tick(time: Int, node: Node): Unit = {
-      val firstToLock = requestQueue.minBy(r => (r.lmstamp, r.requesterId))
+      val sortedRequestQueue = requestQueue.toList.sortBy((r) => (r.lmstamp, r.requesterId))
+      val firstToLock = sortedRequestQueue.head
       if (repliesToReceive.isEmpty &&
         firstToLock.requesterId == node.nodeId) {
-        Console.println(s"${node.nodeId} locks mutex at time ${time} with request queue ${requestQueue.toList.sortBy((r) => (r.lmstamp, r.requesterId))}")
+        Console.println(s"${node.nodeId} locks mutex at time ${time} with request queue ${sortedRequestQueue}")
         onLock(time, node)
         // release
         requestQueue = requestQueue.filterNot(_.requesterId == node.nodeId)
         node.cluster.get.nodes.values.filterNot(_.eq(node)).foreach((n) => {
-          lmsend(node.nodeId, node.input, n.input, Messages.ReleaseOp())
+          lmsend(node.nodeId, node.input, n.input, Messages.ReleaseOp(), time)
         })
         node.behaviour = new Mutex(onLock, ourLmstamp, requestQueue)
+      } else {
+        Console.println(s"${node.nodeId} is awaiting ${repliesToReceive} with queue ${sortedRequestQueue}")
       }
     }
   }
