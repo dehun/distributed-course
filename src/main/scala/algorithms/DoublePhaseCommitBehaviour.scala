@@ -5,20 +5,24 @@ import cluster._
 
 object DoublePhaseCommitBehaviour {
 
-  // Happy path:
-  //  Propose ->
-  //          <- Accept
-  //  Commit  ->
-  case class ProposeMessage(value: Int) extends Message
-  case class AcceptMessage() extends Message
-  case class CommitMessage() extends Message
+  object Messages {
+    // Happy path:
+    //  Propose ->
+    //          <- Accept
+    //  Commit  ->
+    case class ProposeMessage(value: Int) extends Message
+    case class AcceptMessage() extends Message
+    case class CommitMessage() extends Message
 
-  // Fail path:
-  //  Propose ->
-  //         <- Reject
-  //         -> Fail
-  case class RejectMessage() extends Message
-  case class FailMessage() extends Message
+    // Fail path:
+    //  Propose ->
+    //         <- Reject
+    //         -> Fail
+    case class RejectMessage() extends Message
+    case class FailMessage() extends Message
+  }
+
+  import Messages._
 
   class PeerAcceptBehaviour extends NodeBehaviour {
     override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
