@@ -1,11 +1,10 @@
 package algorithms
 
-import algorithms.LamportsMutex.Messages.{LmMessage, LmOp}
 import channel.{Channel, Message}
 import cluster.{Node, NodeBehaviour}
 
 
-object LamportsMutex {
+object LamportsMutexBehavior {
   object Messages {
     class LmOp()
     case class RequestOp() extends LmOp
@@ -18,17 +17,17 @@ object LamportsMutex {
     def onLmMessage(sender: Channel, msg: Messages.LmMessage, node: Node, time: Int)
 
     override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
-      case lmmsg:LmMessage => {
+      case lmmsg:Messages.LmMessage => {
         ourLmstamp = Math.max(ourLmstamp, lmmsg.lmstamp) + 1
         Console.println(s"${node.nodeId} at time ${time} got ${lmmsg.op} with stamp ${lmmsg.lmstamp}, our lmstamp is ${ourLmstamp}")
         onLmMessage(sender, lmmsg, node, time)
       }
     }
 
-    def lmsend(senderId:Node.NodeId, from:Channel, to:Channel, op:LmOp, time:Int) = {
+    def lmsend(senderId:Node.NodeId, from:Channel, to:Channel, op:Messages.LmOp, time:Int) = {
       ourLmstamp += 1
       Console.println(s"${senderId} at time ${time} sending ${op} with stamp ${ourLmstamp}")
-      to.send(from, LmMessage(ourLmstamp, senderId, op))
+      to.send(from, Messages.LmMessage(ourLmstamp, senderId, op))
     }
   }
 
@@ -38,7 +37,7 @@ object LamportsMutex {
               private val ourStartLmstamp:Int,
               private var requestQueue:Set[LockRequest]) extends LmBehaviour(ourStartLmstamp) {
 
-    override def onLmMessage(sender: Channel, msg: LmMessage, node: Node, time: Int): Unit = {
+    override def onLmMessage(sender: Channel, msg: Messages.LmMessage, node: Node, time: Int): Unit = {
       msg.op match {
         case Messages.RequestOp() => {
           requestQueue += LockRequest(msg.lmstamp, msg.senderId)
@@ -58,7 +57,7 @@ object LamportsMutex {
       val otherNodes = node.cluster.get.nodes.values.filterNot(_.eq(node))
       ourLmstamp += 1
       otherNodes.foreach((n) => {
-        n.input.send(node.input, LmMessage(ourLmstamp, node.nodeId, Messages.RequestOp()))
+        n.input.send(node.input, Messages.LmMessage(ourLmstamp, node.nodeId, Messages.RequestOp()))
       })
       requestQueue = requestQueue + LockRequest(ourLmstamp, node.nodeId)
 

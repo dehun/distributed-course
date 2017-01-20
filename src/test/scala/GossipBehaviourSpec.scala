@@ -72,7 +72,7 @@ class GossipBehaviourSpec extends FlatSpec with Matchers {
     val pairs = nodeNames.init.zip(nodeNames.tail) ++ List((nodeNames.last, nodeNames.head))
     val cluster = Cluster.fromNodes(
       pairs.map({case (n1, n2) => new Node(n1,
-        new DroppingChannel(new ReliableChannel(),Stream.iterate(Random.nextBoolean())((_:Boolean) => Random.nextBoolean())), // 50% chance of drop
+        new RandomlyDroppingChannel(new ReliableChannel()),
         new ReliableGossipBehaviour(Set(n1, n2)), // we are using special gossiping behaviour
         new ReliableStorage[Int]())}) toList) // require reliable storage! if we will fail then other nodes will assume that we know them, but we will not!
     // how much ticks it will take to all nodes to get know each other?
@@ -83,7 +83,7 @@ class GossipBehaviourSpec extends FlatSpec with Matchers {
 
   it should "gossiping over unreliable channel requires different approach. spanning tree" in {
     def spawnNode(name:String, knows:Set[String]) = new Node(name,
-      new DroppingChannel(new ReliableChannel(),Stream.iterate(Random.nextBoolean())((_:Boolean) => Random.nextBoolean())), // 50% chance of drop
+      new RandomlyDroppingChannel(new ReliableChannel()),
       new ReliableGossipBehaviour(knows), // we are using special gossiping behaviour
       new ReliableStorage[Int]())
     val nodeNames = Set("A", "B", "C", "D", "E", "F", "G", "H")

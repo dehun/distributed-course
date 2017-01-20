@@ -1,7 +1,7 @@
 import channel.ReliableChannel
 import org.scalatest.{FlatSpec, Matchers}
 import storage.ReliableStorage
-import algorithms.LamportsMutex._
+import algorithms.LamportsMutexBehavior._
 import cluster.{Cluster, Node}
 
 import scala.collection.mutable.MutableList
