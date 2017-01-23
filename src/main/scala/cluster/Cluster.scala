@@ -5,7 +5,7 @@ import cluster.Node.NodeId
 
 
 object Cluster {
-  def fromNodes(nodes:Seq[Node]):Cluster = {
+  def fromNodes(nodes:Traversable[Node]):Cluster = {
     new Cluster(nodes.map(n => n.nodeId -> n).toMap)
   }
 }

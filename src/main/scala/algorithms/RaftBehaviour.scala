@@ -27,23 +27,47 @@ object RaftBehaviour {
   }
 
   object Behaviours {
+    object Timeouts {
+      val leaderElection = 50
+    }
+
     class CommonState {
       var currentTerm:Int = 0
-      var votedFor:Option[String] = None
+      var votedFor:Option[Node.NodeId] = None
 
       var commitIndex:Int = 0
       var lastApplied:Int = 0
     }
 
 
+    trait LeaderHeartbeating {
+      var lastSawLeaderOrVoted:Option[Int] = None
+
+      def sawLeader(time:Int):Unit = lastSawLeaderOrVoted = Some(time)
+
+      def voted(time:Int):Unit = lastSawLeaderOrVoted = Some(time)
+
+      def tick(time:Int, node:Node, state:CommonState):Boolean = {
+        if (lastSawLeaderOrVoted.isDefined &&
+          time - lastSawLeaderOrVoted.get > Timeouts.leaderElection) {
+          node.behaviour = new Candidate(state)
+          return true
+        } else {
+          lastSawLeaderOrVoted = Some(time)
+        }
+        false
+      }
+    }
+
     class Follower(state:CommonState = new CommonState()) extends NodeBehaviour {
+      val leaderHeartbeating = new LeaderHeartbeating {}
 
       override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match  {
         case _ => ???
       }
 
       override def tick(time: Int, node: Node): Unit = {
-
+        // check that we still have a leader
       }
     }
 
