@@ -14,7 +14,7 @@ class BullyBehaviourSpec extends FlatSpec with Matchers {
     val allNodeNames:Set[String] = nodeUids.map("node_" + _) toSet
     val nodes = nodeUids.map(uid => new Node(uidToName(uid), new ReliableChannel(),
       new Behaviours.Bully(uid, allNodeNames - uidToName(uid)), // bully everyone except us
-      new ReliableStorage[Int]()))
+      new ReliableStorage[Any]()))
     val cluster = Cluster.fromNodes(nodes toList)
     // tick cluster
     (1 to 100).foreach(cluster.tick)

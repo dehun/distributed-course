@@ -1,7 +1,7 @@
 package storage
 
 trait Storage[T] {
-  def put(t: T)
+  def put[P <: T](t : P)
   def restart()
   def size:Int
   def get(i:Int):Option[T]

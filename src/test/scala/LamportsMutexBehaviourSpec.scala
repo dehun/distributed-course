@@ -17,7 +17,7 @@ class LamportsMutexBehaviourSpec extends FlatSpec with Matchers {
         new Mutex((time:Int, node:Node) => { lockers += ((time, node.nodeId)) },
           0,
           Set(LockRequest(-1, "test"))), // first test is locked the mutex
-        new ReliableStorage[Int]))
+        new ReliableStorage[Any]))
     val cluster = Cluster.fromNodes(nodes)
     // unlock the mutex
     nodes.foreach(n => n.input.send(n.input, Messages.LmMessage(1, "test", Messages.ReleaseOp())))

@@ -8,8 +8,8 @@ import storage._
 class BerkleysTimeSyncBehaviourSpec extends FlatSpec with Matchers {
   "berkley time sync" should "sync times" in {
     val slaves = (1 to 20).map(i => new Node("slave_" + i, new ReliableChannel(),
-      new Behaviours.Slave(), new ReliableStorage[Int])) toList
-    val master = new Node("master", new ReliableChannel(), new Behaviours.Master(slaves), new ReliableStorage[Int])
+      new Behaviours.Slave(), new ReliableStorage[Any])) toList
+    val master = new Node("master", new ReliableChannel(), new Behaviours.Master(slaves), new ReliableStorage[Any])
     val cluster = Cluster.fromNodes(master::slaves)
     // let some time pass
     (1 to 1000).foreach(cluster.tick)

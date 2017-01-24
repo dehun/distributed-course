@@ -14,7 +14,7 @@ class ChangAndRobertsSpec extends FlatSpec with Matchers {
       pairs.map({case (n1, n2) => new Node("node_" + n1, new ReliableChannel(),
         { if (Random.nextBoolean()) new Behaviour.NonParticipant(n1, "node_" + n2) // half nodes are initiators
           else new Behaviour.NonParticipantInitiator(n1, "node_" + n2) },
-        new ReliableStorage[Int]())}) toList)
+        new ReliableStorage[Any]())}) toList)
     // elect a leader
     (1 to 1000).foreach(cluster.tick)
     // find a leader

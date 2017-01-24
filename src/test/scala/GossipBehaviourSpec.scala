@@ -12,7 +12,7 @@ class GossipBehaviourSpec extends FlatSpec with Matchers {
     val nodeNames = (1 to 4).map("node_" + _).toSet
     // all nodes know each other from the startpu
     val cluster = Cluster.fromNodes(
-      nodeNames.map(n => new Node(n, new ReliableChannel(), new GossipBehaviour(nodeNames), new ReliableStorage[Int]())) toList)
+      nodeNames.map(n => new Node(n, new ReliableChannel(), new GossipBehaviour(nodeNames), new ReliableStorage[Any]())) toList)
     // tick cluster hundred times
     (1 to 100).foreach(cluster.tick)
     // and ensure that all nodes still know each other
@@ -25,7 +25,7 @@ class GossipBehaviourSpec extends FlatSpec with Matchers {
     // (node_1, node_2), (node_2, node_3), ... (node_10, node_1)
     val pairs = nodeNames.init.zip(nodeNames.tail) ++ List((nodeNames.last, nodeNames.head))
     val cluster = Cluster.fromNodes(
-      pairs.map({case (n1, n2) => new Node(n1, new ReliableChannel(), new GossipBehaviour(Set(n1, n2)), new ReliableStorage[Int]())}) toList)
+      pairs.map({case (n1, n2) => new Node(n1, new ReliableChannel(), new GossipBehaviour(Set(n1, n2)), new ReliableStorage[Any]())}) toList)
     // how much ticks it will take to all nodes to get know each other?
     (1 to 10).foreach(cluster.tick)
     // and how much messages?
@@ -39,8 +39,8 @@ class GossipBehaviourSpec extends FlatSpec with Matchers {
     // at first nodes know only one other node
     // (node_1, node_2), (node_2, node_3)
     val pairs = nodeNames.init.zip(nodeNames.tail)
-    val singleNode = new Node(nodeNames.last, new ReliableChannel(), new GossipBehaviour(Set(nodeNames.last)), new ReliableStorage[Int]())
-    val knowOtherNodes = pairs.map({case (n1, n2) => new Node(n1, new ReliableChannel(), new GossipBehaviour(Set(n1, n2)), new ReliableStorage[Int]())}) toList
+    val singleNode = new Node(nodeNames.last, new ReliableChannel(), new GossipBehaviour(Set(nodeNames.last)), new ReliableStorage[Any]())
+    val knowOtherNodes = pairs.map({case (n1, n2) => new Node(n1, new ReliableChannel(), new GossipBehaviour(Set(n1, n2)), new ReliableStorage[Any]())}) toList
     val cluster = Cluster.fromNodes(singleNode :: knowOtherNodes)
     // let them work
     (1 to 20).foreach(cluster.tick)
@@ -55,8 +55,8 @@ class GossipBehaviourSpec extends FlatSpec with Matchers {
     // (node_1, node_2), (node_2, node_3), ... (node_10, node_1)
     val pairs = nonIsolatedNodeNames.init.zip(nonIsolatedNodeNames.tail) ++ List((nonIsolatedNodeNames.last, nonIsolatedNodeNames.head))
     val isolatedNodeName = "isolated_node"
-    val isolatedNode = new Node(isolatedNodeName, new ReliableChannel(), new GossipBehaviour(Set(isolatedNodeName)), new ReliableStorage[Int]())
-    val nonIsolatedNodes = pairs.map({case (n1, n2) => new Node(n1, new ReliableChannel(), new GossipBehaviour(Set(n1, n2)), new ReliableStorage[Int]())}) toList
+    val isolatedNode = new Node(isolatedNodeName, new ReliableChannel(), new GossipBehaviour(Set(isolatedNodeName)), new ReliableStorage[Any]())
+    val nonIsolatedNodes = pairs.map({case (n1, n2) => new Node(n1, new ReliableChannel(), new GossipBehaviour(Set(n1, n2)), new ReliableStorage[Any]())}) toList
     val cluster = Cluster.fromNodes(isolatedNode :: nonIsolatedNodes)
     // tick nodes
     (1 to 10).foreach(cluster.tick)
@@ -74,7 +74,7 @@ class GossipBehaviourSpec extends FlatSpec with Matchers {
       pairs.map({case (n1, n2) => new Node(n1,
         new RandomlyDroppingChannel(new ReliableChannel()),
         new ReliableGossipBehaviour(Set(n1, n2)), // we are using special gossiping behaviour
-        new ReliableStorage[Int]())}) toList) // require reliable storage! if we will fail then other nodes will assume that we know them, but we will not!
+        new ReliableStorage[Any]())}) toList) // require reliable storage! if we will fail then other nodes will assume that we know them, but we will not!
     // how much ticks it will take to all nodes to get know each other?
     (1 to 500).foreach(cluster.tick)
     // all nodes know each other
@@ -85,7 +85,7 @@ class GossipBehaviourSpec extends FlatSpec with Matchers {
     def spawnNode(name:String, knows:Set[String]) = new Node(name,
       new RandomlyDroppingChannel(new ReliableChannel()),
       new ReliableGossipBehaviour(knows), // we are using special gossiping behaviour
-      new ReliableStorage[Int]())
+      new ReliableStorage[Any]())
     val nodeNames = Set("A", "B", "C", "D", "E", "F", "G", "H")
     //  A           E - H
     //     \      /

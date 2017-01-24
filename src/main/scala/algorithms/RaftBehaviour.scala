@@ -26,12 +26,16 @@ object RaftBehaviour {
     }
   }
 
+  case class RaftLogEntry(value:String, term:Int)
+
   object Behaviours {
     object Timeouts {
       val leaderElection = 50
     }
 
     class CommonState {
+      def increaseTerm() = currentTerm += 1
+
       var currentTerm:Int = 0
       var votedFor:Option[Node.NodeId] = None
 
@@ -40,27 +44,29 @@ object RaftBehaviour {
     }
 
 
-    trait LeaderHeartbeating {
+    class LeaderHeartbeating {
       var lastSawLeaderOrVoted:Option[Int] = None
 
       def sawLeader(time:Int):Unit = lastSawLeaderOrVoted = Some(time)
 
       def voted(time:Int):Unit = lastSawLeaderOrVoted = Some(time)
 
-      def tick(time:Int, node:Node, state:CommonState):Boolean = {
+      def tryToBecameCandidate(time:Int):Boolean = {
+
         if (lastSawLeaderOrVoted.isDefined &&
           time - lastSawLeaderOrVoted.get > Timeouts.leaderElection) {
-          node.behaviour = new Candidate(state)
-          return true
+          true
         } else {
-          lastSawLeaderOrVoted = Some(time)
+          if (lastSawLeaderOrVoted.isEmpty)
+            lastSawLeaderOrVoted = Some(time)
         }
         false
       }
     }
 
-    class Follower(state:CommonState = new CommonState()) extends NodeBehaviour {
+    class Follower(raftNodes:Set[Node.NodeId], state:CommonState = new CommonState()) extends NodeBehaviour {
       val leaderHeartbeating = new LeaderHeartbeating {}
+      val lastLeader:Option[Node.NodeId] = None
 
       override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match  {
         case _ => ???
@@ -68,12 +74,35 @@ object RaftBehaviour {
 
       override def tick(time: Int, node: Node): Unit = {
         // check that we still have a leader
+        if (leaderHeartbeating.tryToBecameCandidate(time)) {
+          node.behaviour = new Candidate(state, raftNodes)
+        }
       }
     }
 
-    class Candidate(state:CommonState) extends NodeBehaviour {
+    class Candidate(state:CommonState, raftNodes:Set[Node.NodeId]) extends NodeBehaviour {
+      private var _tick = (time:Int, node:Node) => _onBecome(time, node)
+
+      private def _onBecome(time:Int, node:Node):Unit = {
+        state.increaseTerm()
+        val lastEntry = node.storage.asList.last.asInstanceOf[RaftLogEntry]
+        val requestVote = Messages.Vote.Request(
+          state.currentTerm, node.nodeId,
+          node.storage.size - 1, lastEntry.term)
+        raftNodes.map(n => node.cluster.get.nodes(n)).foreach(n => n.input.send(node.input, requestVote))
+        _tick = (time:Int, node:Node) => _normalTick(time, node)
+      }
+
+      private def _normalTick(time:Int, node:Node):Unit = {
+
+      }
+
       override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
         case _ => ???
+      }
+
+      override def tick(time: Int, node: Node): Unit = {
+        _tick(time, node)
       }
     }
 

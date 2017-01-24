@@ -10,9 +10,9 @@ class ReliableDeliveryBehaviourSpec extends FlatSpec with Matchers {
     val thingsToDeliver = (1 to 128).toList
     val receiverBehaviour = new Behaviours.Receiver[Int]()
     val receiver = new Node("receiver", receivingChannel, receiverBehaviour,
-      new ReliableStorage[Int]())
+      new ReliableStorage[Any]())
     val transmitterBehaviour = new Behaviours.Transmitter[Int](thingsToDeliver, receivingChannel)
-    val transmitter = new Node("transmitter", new ReliableChannel(), transmitterBehaviour, new ReliableStorage[Int]())
+    val transmitter = new Node("transmitter", new ReliableChannel(), transmitterBehaviour, new ReliableStorage[Any]())
     val cluster = Cluster.fromNodes(List(transmitter, receiver))
 
     // tick while everything will not be delivered

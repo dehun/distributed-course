@@ -9,7 +9,7 @@ class FullyConnectedRegenBehaviourSpec extends FlatSpec with Matchers {
     val nodeNames = (1 to 5).map("node_" + _).toSet
     val nodes = nodeNames.map(name => new Node(name, new ReliableChannel(),
       new Behaviours.FullyConnectedRegen(nodeNames),
-      new ReliableStorage[Int]))
+      new ReliableStorage[Any]))
     val cluster = Cluster.fromNodes(nodes)
     // tick nodes
     (1 to 1000).foreach(cluster.tick)
@@ -21,7 +21,7 @@ class FullyConnectedRegenBehaviourSpec extends FlatSpec with Matchers {
     val nodeNames = (1 to 10).map("node_" + _).toSet
     val nodes = nodeNames.map(name => new Node(name, new ReliableChannel(),
       new Behaviours.FullyConnectedRegen(nodeNames),
-      new ReliableStorage[Int]))
+      new ReliableStorage[Any]))
     val cluster = Cluster.fromNodes(nodes)
     // tick nodes
     (1 to 1000).foreach(cluster.tick)
@@ -39,7 +39,7 @@ class FullyConnectedRegenBehaviourSpec extends FlatSpec with Matchers {
     val nodeNames = (1 to 10).map("node_" + _).toSet
     val nodes = nodeNames.map(name => new Node(name, new ReliableChannel(),
       new Behaviours.FullyConnectedRegen(nodeNames),
-      new ReliableStorage[Int]))
+      new ReliableStorage[Any]))
     val cluster = Cluster.fromNodes(nodes)
     // tick nodes
     (1 to 1000).foreach(cluster.tick)
@@ -59,7 +59,7 @@ class FullyConnectedRegenBehaviourSpec extends FlatSpec with Matchers {
     val nodeNames = (1 to 3).map("node_" + _).toSet
     val nodes = nodeNames.map(name => new Node(name, new ReliableChannel(),
       new Behaviours.FullyConnectedRegen(nodeNames),
-      new ReliableStorage[Int]))
+      new ReliableStorage[Any]))
     val cluster = Cluster.fromNodes(nodes)
     // tick nodes
     (1 to 501).foreach(cluster.tick)
@@ -91,7 +91,7 @@ class FullyConnectedRegenBehaviourSpec extends FlatSpec with Matchers {
     val nodeNames = (1 to 3).map("node_" + _).toSet
     val nodes = nodeNames.map(name => new Node(name, new ReliableChannel(),
       new Behaviours.FullyConnectedRegen(nodeNames),
-      new ReliableStorage[Int]))
+      new ReliableStorage[Any]))
     val cluster = Cluster.fromNodes(nodes)
     // tick nodes
     (1 to 501).foreach(cluster.tick)
@@ -136,7 +136,7 @@ class FullyConnectedRegenBehaviourSpec extends FlatSpec with Matchers {
     val nodeNames = (1 to 4).map("node_" + _).toSet
     val nodes = nodeNames.map(name => new Node(name, new ReliableChannel(),
       new Behaviours.FullyConnectedRegen(nodeNames),
-      new ReliableStorage[Int]))
+      new ReliableStorage[Any]))
     val cluster = Cluster.fromNodes(nodes)
     // tick nodes
     (1 to 501).foreach(cluster.tick)

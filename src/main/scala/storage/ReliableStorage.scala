@@ -4,7 +4,7 @@ package storage
 class ReliableStorage[T] extends Storage[T] {
   private var data:List[T] = List[T]()
 
-  override def put(t: T): Unit = {
+  override def put[P <: T](t: P): Unit = {
     data = data ::: List(t)
   }
 

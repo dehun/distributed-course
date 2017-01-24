@@ -7,7 +7,7 @@ import storage._
 
 class SimpleBehaviourTest extends FlatSpec with Matchers {
   "dead node" should "be dead" in {
-    val node1 = new Node("node1", new ReliableChannel(), new DeadNodeBehaviour(), new ReliableStorage[Int])
+    val node1 = new Node("node1", new ReliableChannel(), new DeadNodeBehaviour(), new ReliableStorage[Any])
     node1.tick(0)
     val ch = new ReliableChannel()
     node1.input.send(ch, IntMessage(42))
@@ -15,7 +15,7 @@ class SimpleBehaviourTest extends FlatSpec with Matchers {
   }
 
   "echo node" should "echo" in {
-    val node1 = new Node("node1", new ReliableChannel(), new EchoBehaviour(), new ReliableStorage[Int])
+    val node1 = new Node("node1", new ReliableChannel(), new EchoBehaviour(), new ReliableStorage[Any])
     val ch = new ReliableChannel()
     node1.input.send(ch, IntMessage(42))
     node1.tick(0)
@@ -25,7 +25,7 @@ class SimpleBehaviourTest extends FlatSpec with Matchers {
   }
 
   "accept everything" should "accept message" in {
-    val node1 = new Node("node1", new ReliableChannel(), new AcceptEverythingBehaviour(), new ReliableStorage[Int])
+    val node1 = new Node("node1", new ReliableChannel(), new AcceptEverythingBehaviour(), new ReliableStorage[Any])
     val ch = new ReliableChannel()
     node1.input.send(ch, IntMessage(42))
     node1.tick(0)
