@@ -1,8 +1,10 @@
+package algorithms
+
+import algorithms.LamportsMutexBehavior._
 import channel.ReliableChannel
+import cluster.{Cluster, Node}
 import org.scalatest.{FlatSpec, Matchers}
 import storage.ReliableStorage
-import algorithms.LamportsMutexBehavior._
-import cluster.{Cluster, Node}
 
 import scala.collection.mutable.MutableList
 

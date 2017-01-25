@@ -1,9 +1,10 @@
-import org.scalatest._
+package algorithms
 
+import algorithms.TriplePhaseCommitBehaviour.Behaviours._
 import channel._
 import cluster._
+import org.scalatest._
 import storage._
-import algorithms.TriplePhaseCommitBehaviour.Behaviours._
 
 
 class TriplePhaseCommitSpec extends FlatSpec with Matchers {

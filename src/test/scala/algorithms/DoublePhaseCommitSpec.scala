@@ -1,9 +1,10 @@
-import org.scalatest._
+package algorithms
 
+import algorithms.DoublePhaseCommitBehaviour._
 import channel._
 import cluster._
+import org.scalatest._
 import storage._
-import algorithms.DoublePhaseCommitBehaviour._
 
 class DoublePhaseCommitSpec extends FlatSpec with Matchers {
   "2pc" should "happy path commit" in {

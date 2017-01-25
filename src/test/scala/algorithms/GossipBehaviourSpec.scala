@@ -1,10 +1,10 @@
-import org.scalatest._
+package algorithms
+
 import algorithms.GossipBehaviour._
 import channel._
 import cluster._
+import org.scalatest._
 import storage._
-
-import scala.util.Random
 
 
 class GossipBehaviourSpec extends FlatSpec with Matchers {

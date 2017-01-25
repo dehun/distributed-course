@@ -1,9 +1,11 @@
+package algorithms
+
 import algorithms.DhtBehaviour.Behaviours.QueryResult
-import org.scalatest._
+import algorithms.DhtBehaviour._
 import channel._
 import cluster._
+import org.scalatest._
 import storage._
-import algorithms.DhtBehaviour._
 
 class DhtBehaviourSpec extends FlatSpec with Matchers {
   "dht" should "store all values on right nodes" in {

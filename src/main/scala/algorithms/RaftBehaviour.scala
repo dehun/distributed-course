@@ -3,6 +3,8 @@ package algorithms
 import channel.{Channel, Message}
 import cluster.{Node, NodeBehaviour}
 
+import scala.util.Random
+
 // TODO: implement me
 object RaftBehaviour {
   object Messages {
@@ -24,6 +26,10 @@ object RaftBehaviour {
                          lastLogTerm:Int) extends Message
       case class Reply(term:Int, voteGranted:Boolean) extends Message
     }
+    object ClientPut {
+      case class Request(value:String) extends Message
+      case class Reply(success:Boolean) extends Message
+    }
   }
 
   case class RaftLogEntry(value:String, term:Int)
@@ -31,6 +37,7 @@ object RaftBehaviour {
   object Behaviours {
     object Timeouts {
       val leaderElection = 50
+      val leaderElectionRandomization = 10
     }
 
     class CommonState {
@@ -44,7 +51,7 @@ object RaftBehaviour {
     }
 
 
-    class LeaderHeartbeating {
+    class LeaderHeartbeating(offset:Int) {
       var lastSawLeaderOrVoted:Option[Int] = None
 
       def sawLeader(time:Int):Unit = lastSawLeaderOrVoted = Some(time)
@@ -52,24 +59,53 @@ object RaftBehaviour {
       def voted(time:Int):Unit = lastSawLeaderOrVoted = Some(time)
 
       def tryToBecameCandidate(time:Int):Boolean = {
-
         if (lastSawLeaderOrVoted.isDefined &&
           time - lastSawLeaderOrVoted.get > Timeouts.leaderElection) {
           true
         } else {
           if (lastSawLeaderOrVoted.isEmpty)
-            lastSawLeaderOrVoted = Some(time)
+            lastSawLeaderOrVoted = Some(time + offset)
         }
         false
       }
     }
 
     class Follower(raftNodes:Set[Node.NodeId], state:CommonState = new CommonState()) extends NodeBehaviour {
-      val leaderHeartbeating = new LeaderHeartbeating {}
+      val leaderHeartbeating = new LeaderHeartbeating(Random.nextInt(Timeouts.leaderElectionRandomization))
       val lastLeader:Option[Node.NodeId] = None
 
       override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match  {
-        case _ => ???
+        case req:Messages.AppendEntries.Request => {
+          // 3. if an existing entry conflicts with a new (same index, different terms)
+          for {ours <- node.storage.get(req.leaderCommit).collect({case a:RaftLogEntry => a})} {
+            if (ours.term != req.term) {
+              node.storage.shrinkRight(req.leaderCommit)
+            }
+          }
+          // 1. if term < currentTerm reply false
+          // 2. if prevLogIndex with requested term does not exists reply false
+          val prevEntry = node.storage.get(req.prevLogIndex)
+          if (req.term < state.currentTerm ||
+            prevEntry.isEmpty ||
+            prevEntry.get.asInstanceOf[RaftLogEntry].term != req.prevLogTerm
+           ) {
+            sender.send(node.input, Messages.AppendEntries.Reply(state.currentTerm, false))
+          } else {
+
+          }
+        }
+
+        case req:Messages.Vote.Request => {
+          if (req.term < state.currentTerm ||
+            (state.votedFor.isDefined && state.votedFor.get != req.candidateId)
+          ) {
+            sender.send(node.input, Messages.Vote.Reply(state.currentTerm, false))
+          } else {
+            sender.send(node.input, Messages.Vote.Reply(state.currentTerm, true))
+            state.votedFor = Some(req.candidateId)
+          }
+          leaderHeartbeating.voted(time) // TODO: should be here, or only when we vote true?
+        }
       }
 
       override def tick(time: Int, node: Node): Unit = {
@@ -82,6 +118,7 @@ object RaftBehaviour {
 
     class Candidate(state:CommonState, raftNodes:Set[Node.NodeId]) extends NodeBehaviour {
       private var _tick = (time:Int, node:Node) => _onBecome(time, node)
+      private var _repliesToReceive = raftNodes.size / 2 + 1
 
       private def _onBecome(time:Int, node:Node):Unit = {
         state.increaseTerm()
@@ -98,7 +135,18 @@ object RaftBehaviour {
       }
 
       override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
-        case _ => ???
+        case Messages.Vote.Reply(term, isVoteGranted) =>
+          if (isVoteGranted) {
+            _repliesToReceive -= 1
+          } else {
+            node.behaviour = new Follower(raftNodes, state)
+          }
+
+        case req:Messages.AppendEntries.Request => {
+          if (req.term >= state.currentTerm) {
+            node.behaviour = new Follower(raftNodes, state)
+          }
+        }
       }
 
       override def tick(time: Int, node: Node): Unit = {

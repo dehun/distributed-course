@@ -1,8 +1,9 @@
-import org.scalatest._
+package algorithms
 
 import algorithms.BerkleysTimeSyncBehaviour._
-import cluster._
 import channel._
+import cluster._
+import org.scalatest._
 import storage._
 
 class BerkleysTimeSyncBehaviourSpec extends FlatSpec with Matchers {

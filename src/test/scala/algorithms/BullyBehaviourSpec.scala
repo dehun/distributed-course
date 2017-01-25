@@ -1,9 +1,10 @@
+package algorithms
+
+import algorithms.BullyBehaviour._
 import channel.ReliableChannel
-import cluster.Node
-import cluster.Cluster
+import cluster.{Cluster, Node}
 import org.scalatest._
 import storage.ReliableStorage
-import algorithms.BullyBehaviour._
 
 import scala.util.Random
 

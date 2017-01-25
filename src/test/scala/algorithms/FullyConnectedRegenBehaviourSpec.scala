@@ -1,8 +1,10 @@
-import org.scalatest._
+package algorithms
+
+import algorithms.FullyConnectedRegenBehaviour._
 import channel._
 import cluster._
+import org.scalatest._
 import storage._
-import algorithms.FullyConnectedRegenBehaviour._
 
 class FullyConnectedRegenBehaviourSpec extends FlatSpec with Matchers {
   "fully connected regen" should "work just fine without link corruptions" in {

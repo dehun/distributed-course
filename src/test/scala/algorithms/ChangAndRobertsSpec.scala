@@ -1,8 +1,11 @@
+package algorithms
+
 import algorithms.ChangAndRobertsBehaviour._
 import channel.ReliableChannel
 import cluster.{Cluster, Node}
 import org.scalatest.{FlatSpec, Matchers}
 import storage.ReliableStorage
+
 import scala.util.Random
 
 class ChangAndRobertsSpec extends FlatSpec with Matchers {

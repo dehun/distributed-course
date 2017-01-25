@@ -1,11 +1,13 @@
 package storage
 
+import scala.collection.mutable.ListBuffer
+
 
 class ReliableStorage[T] extends Storage[T] {
-  private var data:List[T] = List[T]()
+  private var data = ListBuffer[T]()
 
   override def put[P <: T](t: P): Unit = {
-    data = data ::: List(t)
+    data += t
   }
 
   override def restart(): Unit = {}
@@ -17,4 +19,6 @@ class ReliableStorage[T] extends Storage[T] {
       Some(data(i))
     } else None
   }
+
+  override def delete(i: Int): Unit = data.remove(i)
 }

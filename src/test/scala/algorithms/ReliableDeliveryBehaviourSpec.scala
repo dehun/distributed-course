@@ -1,7 +1,9 @@
+package algorithms
+
+import algorithms.ReliableDeliveryBehaviour._
 import channel._
 import cluster.{Cluster, Node}
 import org.scalatest.{FlatSpec, Matchers}
-import algorithms.ReliableDeliveryBehaviour._
 import storage.ReliableStorage
 
 

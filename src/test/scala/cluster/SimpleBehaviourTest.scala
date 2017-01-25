@@ -1,8 +1,7 @@
-import org.scalatest._
-import org.scalatest.Assertions._
+package cluster
 
 import channel._
-import cluster._
+import org.scalatest._
 import storage._
 
 class SimpleBehaviourTest extends FlatSpec with Matchers {
