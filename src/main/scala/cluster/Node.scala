@@ -18,6 +18,14 @@ class Node(val nodeId:Node.NodeId, var input:Channel, var behaviour:NodeBehaviou
     behaviour.tick(time, this)
   }
 
+  def log(msg:String) = {
+    Console.println(s"${nodeId}::${behaviour.getClass.getName} ${msg}")
+  }
+
+  def logWithTime(time:Int, msg:String) = {
+    Console.println(s"${nodeId}::${behaviour.getClass.getName} [${time}] ${msg}")
+  }
+
   def processMessages(time:Int) = {
     var msg = input.receive()
     while (msg.isDefined) {
