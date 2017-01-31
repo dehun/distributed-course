@@ -5,7 +5,6 @@ import cluster.{Node, NodeBehaviour}
 
 import scala.util.Random
 
-// TODO: implement me
 object RaftBehaviour {
   object Messages {
     object AppendEntries {
@@ -13,9 +12,10 @@ object RaftBehaviour {
                          leaderId:Node.NodeId,
                          prevLogIndex:Int,
                          prevLogTerm:Int,
-                         entries: List[String],
+                         entries: List[RaftLogEntry],
                          leaderCommit:Int) extends Message
-      case class Reply(term:Int,
+      case class Reply(senderId:Node.NodeId,
+                       term:Int,
                        success:Boolean) extends Message
 
     }
@@ -62,7 +62,7 @@ object RaftBehaviour {
       def tryToBecameCandidate(time:Int):Boolean = {
         if (lastSawLeaderOrVoted.isDefined &&
           time - lastSawLeaderOrVoted.get > Timeouts.leaderElection) {
-          return true
+          true
         } else {
           if (lastSawLeaderOrVoted.isEmpty)
             lastSawLeaderOrVoted = Some(time + offset)
@@ -79,25 +79,27 @@ object RaftBehaviour {
         // 1. if term < currentTerm reply false
         // 2. if prevLogIndex with requested term does not exists reply false
         val prevEntry = node.storage.get(req.prevLogIndex).map(_.asInstanceOf[RaftLogEntry])
-        if (req.term >= state.currentTerm ||
+        if (req.term  < state.currentTerm ||
           prevEntry.isEmpty ||
           prevEntry.get.term != req.prevLogTerm
         ) {
           node.log(s"AppendEntries false req.term is ${req.term}, our term is ${state.currentTerm}, prev entry term ${prevEntry}, req.prevLogTerm is ${req.prevLogTerm}")
-          sender.send(node.input, Messages.AppendEntries.Reply(state.currentTerm, success = false))
+          sender.send(node.input, Messages.AppendEntries.Reply(node.nodeId, state.currentTerm, success = false))
           false
         } else {
           // 3. if an existing entry conflicts with a new (same index, different terms)
           for {ours <- node.storage.get(req.leaderCommit).collect({case a:RaftLogEntry => a})} {
             if (ours.term != req.term) {
-              node.storage.shrinkRight(req.leaderCommit)
+              node.log(s"detected log inconsistency, shrinking storage to leader commit ${req.leaderCommit}")
+              node.storage.shrinkRight(req.leaderCommit + 1)
             }
           }
           // 4. Append new entries
-          req.entries.foreach(v => node.storage.put(RaftLogEntry(v, req.term)))
+          req.entries.foreach(le => node.storage.put(le))
           // 5. If leader commit > commitIndex
           if (req.leaderCommit > state.commitIndex)
-            state.commitIndex = Math.min(req.leaderCommit, node.storage.size - 1)
+            state.commitIndex = Math.min(req.leaderCommit, state.commitIndex)
+          sender.send(node.input, Messages.AppendEntries.Reply(node.nodeId, state.currentTerm, success = true))
           true
         }
       }
@@ -125,8 +127,11 @@ object RaftBehaviour {
       override def init(node: Node): Unit = {
         // we need this as we require previous entry to be present everywhere
         // to avoid additional checks lets have the same entry on all nodes right from the startup
-        if (node.storage.size == 0)
+        if (node.storage.size == 0) {
           node.storage.put(RaftLogEntry("placeholder", 0))
+          state.commitIndex = 0
+        }
+
       }
 
       override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match  {
@@ -137,6 +142,7 @@ object RaftBehaviour {
         case req:Messages.Vote.Request => {
           handleVote(sender, node, state, req)
           leaderHeartbeating.voted(time) // TODO: should be here, or only when we vote true?
+          //state.currentTerm = state.currentTerm.max(req.term) // TODO: double check
         }
 
         case _:Messages.AppendEntries.Reply => {} // TODO: double check
@@ -181,6 +187,7 @@ object RaftBehaviour {
           if (isVoteGranted) {
             _repliesToReceive -= 1
           } else {
+            state.votedFor = None
             node.behaviour = new Follower(raftNodes, state)
           }
           if (_repliesToReceive == 0) {
@@ -207,28 +214,89 @@ object RaftBehaviour {
       }
     }
 
+    case class ClientRequest(logIdx:Int, callback:Channel)
+
     class Leader(override val state:CommonState, override val raftNodes:Set[Node.NodeId]) extends NodeBehaviour with RaftBehavior {
-      var lastHeartbeatSent:Option[Int] = None
+      private var lastHeartbeatSent:Option[Int] = None
+      private var nextIndex = Map.empty[Node.NodeId, Int]
+      private var matchIndex = raftNodes.map(n => n -> 0).toMap
+      private var clientRequests = List.empty[ClientRequest]
 
       override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
-        case _:Messages.Vote.Reply => {} // we already a leader, do nothing with this one
-        case _:Messages.AppendEntries.Reply => {} // TODO: implement me
-        case req:Messages.Vote.Request => {
-          handleVote(sender, node, state, req)
+        case req:Messages.Vote.Reply =>
+          if (!req.voteGranted && req.term > state.currentTerm) {
+            node.logWithTime(time, s"leader received vote reply with higher term ${req.term} > its own ${state.currentTerm}, reverting to follower")
+            node.behaviour = new Follower(raftNodes, state)
+          }
+
+        case req:Messages.ClientPut.Request => {
+          node.logWithTime(time, s"client put value ${req.value}")
+          node.storage.put(RaftLogEntry(req.value, state.currentTerm))
+          clientRequests = ClientRequest(node.storage.size - 1, sender)::clientRequests
         }
+
+        case req:Messages.AppendEntries.Reply =>
+          if (req.term <= state.currentTerm) {
+            if (req.success) { // if it was due to log inconsistancy
+              // update match index
+              matchIndex = matchIndex.updated(req.senderId, nextIndex(req.senderId))
+              // update state.commitIndex
+              if (state.commitIndex != node.storage.size - 1) {
+                node.log(s"updating ${state.commitIndex}, as not equal to last entry ${node.storage.size - 1}")
+                state.commitIndex = (state.commitIndex until node.storage.size).maxBy(
+                  i => {
+                    val majority = raftNodes.size / 2 + 1
+                    val entry = node.storage.get(i).get.asInstanceOf[RaftLogEntry]
+                    if ((raftNodes.count(rn => matchIndex(rn) >= i) >= majority) &&
+                      (entry.term == state.currentTerm)) {
+                      i
+                    } else {
+                      state.commitIndex
+                    }
+                  })
+              }
+              node.logWithTime(time, s"update commit index to ${state.commitIndex}")
+            } else {
+              node.logWithTime(time, s"resync node ${req.senderId} as its log was inconsistent at index ${nextIndex(req.senderId)}")
+              nextIndex = nextIndex.updated(req.senderId, nextIndex(req.senderId) - 1)
+              //syncNode(node.cluster.get.nodes(req.senderId))
+            }
+          } else { // we are not longer leader, as there are higher term discovered
+            node.logWithTime(time, s"no longer a leader, higher term discovered, ${state.currentTerm} > ${req.term}")
+            node.behaviour = new Follower(raftNodes, state)
+          }
+
+        case req:Messages.Vote.Request => {
+          handleVote(sender, node, state, req) // TODO: return value check?
+        }
+      }
+
+      def syncNode(node:Node):Unit = {
+        // TODO: implement me
       }
 
       override def tick(time: Int, node: Node): Unit = {
         if (lastHeartbeatSent.isEmpty) {
           lastHeartbeatSent = Some(time)
         }
+
+        val lastEntryIndex = node.storage.size - 1
+        nextIndex = raftNodes.map(n => n -> nextIndex.getOrElse(n, lastEntryIndex + 1)).toMap
+
         if (time - lastHeartbeatSent.get > Timeouts.heartbeating) {
-          val lastIndex = node.storage.size - 1
-          val lastEntry = node.storage.get(lastIndex).get.asInstanceOf[RaftLogEntry]
-          val heartbeatMsg = Messages.AppendEntries.Request(state.currentTerm, node.nodeId, lastIndex + 1, lastEntry.term, List.empty[String], lastIndex)
           lastHeartbeatSent = Some(time)
           raftNodes.filterNot(_ == node.nodeId).foreach(
-            n => node.cluster.get.nodes(n).input.send(node.input, heartbeatMsg))
+            targetNode => {
+              node.logWithTime(time, s"syncing node ${targetNode}")
+              val prevIndex = nextIndex(targetNode) - 1
+              val prevEntry = node.storage.get(prevIndex).get.asInstanceOf[RaftLogEntry]
+              val entries = (prevIndex + 1 until node.storage.size).map(
+                i => node.storage.get(i).get.asInstanceOf[RaftLogEntry]) toList
+              val heartbeatMsg = Messages.AppendEntries.Request(
+                state.currentTerm, node.nodeId, prevIndex,
+                prevEntry.term, entries, state.commitIndex)
+              node.cluster.get.nodes(targetNode).input.send(node.input, heartbeatMsg)
+            })
         }
       }
     }
@@ -238,8 +306,6 @@ object RaftBehaviour {
         case _ => ???
       }
     }
-
-
   }
 
 }

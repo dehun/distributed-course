@@ -7,5 +7,6 @@ trait Storage[T] {
   def get(i:Int):Option[T]
   def asList:List[T] = (0 until size).map(i => get(i).get).toList
   def shrinkRight(n:Int) = while (n < size) { delete(size - 1)}
+  def last:Option[T] = get(size - 1)
   def delete(i:Int)
 }
