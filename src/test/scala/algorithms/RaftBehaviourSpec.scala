@@ -32,7 +32,7 @@ class RaftBehaviourSpec extends FlatSpec with Matchers {
     // kill a leader
     leaders.head.behaviour = new DeadNodeBehaviour()
     // and elect a new one
-    (1 to 500).foreach(cluster.tick)
+    (501 to 1000).foreach(cluster.tick)
     // leader should be elected by now
     assert (raftNodes.filter(_.behaviour.isInstanceOf[Behaviours.Leader]).size === 1)
   }

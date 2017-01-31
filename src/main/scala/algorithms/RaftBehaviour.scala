@@ -55,17 +55,19 @@ object RaftBehaviour {
     class LeaderHeartbeating(offset:Int) {
       var lastSawLeaderOrVoted:Option[Int] = None
 
-      def sawLeader(time:Int):Unit = lastSawLeaderOrVoted = Some(time)
+      def sawLeader(time:Int):Unit = lastSawLeaderOrVoted = Some(time + offset)
 
-      def voted(time:Int):Unit = lastSawLeaderOrVoted = Some(time)
+      def voted(time:Int):Unit = lastSawLeaderOrVoted = Some(time + offset)
 
       def tryToBecameCandidate(time:Int):Boolean = {
         if (lastSawLeaderOrVoted.isDefined &&
           time - lastSawLeaderOrVoted.get > Timeouts.leaderElection) {
           true
         } else {
-          if (lastSawLeaderOrVoted.isEmpty)
+          if (lastSawLeaderOrVoted.isEmpty) {
+            Console.println(s"startng with offset ${offset}")
             lastSawLeaderOrVoted = Some(time + offset)
+          }
           false
         }
       }
@@ -105,12 +107,15 @@ object RaftBehaviour {
       }
 
       def handleVote(sender:Channel, node:Node, state:CommonState, req:Messages.Vote.Request) = {
+        // TODO: where is req.lastIndex and req.lastTerm checks?
         if (req.term < state.currentTerm ||
           (state.votedFor.isDefined && state.votedFor.get != req.candidateId)
         ) {
+          node.log(s"voting no for candidate ${req.candidateId}, req.term is ${req.term}, our term is ${state.currentTerm}")
           sender.send(node.input, Messages.Vote.Reply(state.currentTerm, false))
           false
         } else {
+          node.log(s"voting yes for candidate ${req.candidateId}, req.term is ${req.term}, our term is ${state.currentTerm}")
           sender.send(node.input, Messages.Vote.Reply(state.currentTerm, true))
           state.votedFor = Some(req.candidateId)
           true
@@ -131,18 +136,25 @@ object RaftBehaviour {
           node.storage.put(RaftLogEntry("placeholder", 0))
           state.commitIndex = 0
         }
-
       }
 
       override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match  {
-        case req:Messages.AppendEntries.Request =>
+        case req:Messages.AppendEntries.Request => {
           if (handleAppendEntries(sender, node, req)) // TODO: double check this
             leaderHeartbeating.sawLeader(time)
+          if (req.term > state.currentTerm) {
+            state.currentTerm = req.term
+            state.votedFor = None
+          }
+        }
 
         case req:Messages.Vote.Request => {
+          if (state.currentTerm < req.term) {
+            state.currentTerm = req.term
+            state.votedFor = None
+          }
           handleVote(sender, node, state, req)
           leaderHeartbeating.voted(time) // TODO: should be here, or only when we vote true?
-          //state.currentTerm = state.currentTerm.max(req.term) // TODO: double check
         }
 
         case _:Messages.AppendEntries.Reply => {} // TODO: double check
@@ -162,6 +174,7 @@ object RaftBehaviour {
                     override  val raftNodes:Set[Node.NodeId]) extends NodeBehaviour with RaftBehavior {
       private var _tick = (time:Int, node:Node) => _onBecome(time, node)
       private var _repliesToReceive = raftNodes.size / 2 + 1 - 1 // self
+      // WTF we need leader heartbeating here?
       private val leaderHeartbeating = new LeaderHeartbeating(Random.nextInt(Timeouts.leaderElectionRandomization))
 
       private def _onBecome(time:Int, node:Node):Unit = {
@@ -171,13 +184,14 @@ object RaftBehaviour {
         val requestVote = Messages.Vote.Request(
           state.currentTerm, node.nodeId,
           node.storage.size - 1, lastEntry.term)
-        raftNodes.map(n => node.cluster.get.nodes(n)).foreach(n => n.input.send(node.input, requestVote))
+        raftNodes.filter(_ != node.nodeId).map(n => node.cluster.get.nodes(n)).foreach(n => n.input.send(node.input, requestVote))
         _tick = (time:Int, node:Node) => _normalTick(time, node)
         state.votedFor = Some(node.nodeId)
       }
 
       private def _normalTick(time:Int, node:Node):Unit = {
         if (leaderHeartbeating.tryToBecameCandidate(time)) {
+          node.log("term ended without leader, restarting as candidate")
           node.behaviour = new Candidate(state, raftNodes)
         }
       }
@@ -185,9 +199,12 @@ object RaftBehaviour {
       override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
         case Messages.Vote.Reply(term, isVoteGranted) => {
           if (isVoteGranted) {
+            node.logWithTime(time, s"received yes vote")
             _repliesToReceive -= 1
           } else {
+            node.logWithTime(time, s"received no vote, reverting")
             state.votedFor = None
+            state.currentTerm = term.max(state.currentTerm)
             node.behaviour = new Follower(raftNodes, state)
           }
           if (_repliesToReceive == 0) {
@@ -199,13 +216,17 @@ object RaftBehaviour {
         case req:Messages.AppendEntries.Request => {
           if (req.term >= state.currentTerm) {
             handleAppendEntries(sender, node, req)
+            state.currentTerm = req.term
             node.behaviour = new Follower(raftNodes, state)
           }
         }
 
         case req:Messages.Vote.Request => {
-          handleVote(sender, node, state, req)
-          leaderHeartbeating.voted(time) // TODO: should be here, or only when we vote true?
+          if (handleVote(sender, node, state, req)) {
+            state.currentTerm = req.term.max(state.currentTerm)
+            node.behaviour = new Follower(raftNodes, state)
+          }
+          leaderHeartbeating.voted(time)
         }
       }
 
@@ -226,6 +247,7 @@ object RaftBehaviour {
         case req:Messages.Vote.Reply =>
           if (!req.voteGranted && req.term > state.currentTerm) {
             node.logWithTime(time, s"leader received vote reply with higher term ${req.term} > its own ${state.currentTerm}, reverting to follower")
+            state.currentTerm = req.term
             node.behaviour = new Follower(raftNodes, state)
           }
 
@@ -259,7 +281,6 @@ object RaftBehaviour {
             } else {
               node.logWithTime(time, s"resync node ${req.senderId} as its log was inconsistent at index ${nextIndex(req.senderId)}")
               nextIndex = nextIndex.updated(req.senderId, nextIndex(req.senderId) - 1)
-              //syncNode(node.cluster.get.nodes(req.senderId))
             }
           } else { // we are not longer leader, as there are higher term discovered
             node.logWithTime(time, s"no longer a leader, higher term discovered, ${state.currentTerm} > ${req.term}")
