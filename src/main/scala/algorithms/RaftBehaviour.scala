@@ -264,6 +264,7 @@ object RaftBehaviour {
               matchIndex = matchIndex.updated(req.senderId, nextIndex(req.senderId))
               // update state.commitIndex
               if (state.commitIndex != node.storage.size - 1) {
+                val oldCommitIndex = state.commitIndex
                 node.log(s"updating ${state.commitIndex}, as not equal to last entry ${node.storage.size - 1}")
                 state.commitIndex = (state.commitIndex until node.storage.size).maxBy(
                   i => {
@@ -276,6 +277,11 @@ object RaftBehaviour {
                       state.commitIndex
                     }
                   })
+                // send replies to requests
+                val (completedRequests, newClientRequests) = clientRequests.partition(r => r.logIdx <= state.commitIndex)
+                clientRequests = newClientRequests
+                completedRequests.foreach(r => r.callback.send(node.input, Messages.ClientPut.Reply(true)))
+                node.log(s"comleting requests ${completedRequests}")
               }
               node.logWithTime(time, s"update commit index to ${state.commitIndex}")
             } else {
@@ -289,6 +295,11 @@ object RaftBehaviour {
 
         case req:Messages.Vote.Request => {
           handleVote(sender, node, state, req) // TODO: return value check?
+        }
+
+        case req:Messages.AppendEntries.Request => {
+          // TODO: implement me
+          ???
         }
       }
 
