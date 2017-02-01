@@ -64,4 +64,40 @@ class RaftBehaviourSpec extends FlatSpec with Matchers {
     // the reply messages should be there at some point
     assert(trecv.isDefined)
   }
+
+  it should "store several pushed values" in {
+    val raftNodeNames = (1 to 5).map(n => s"raft_${n}").toSet
+    val raftNodes = raftNodeNames.map(n =>
+      new Node(n, new ReliableChannel(), new Behaviours.Follower(raftNodeNames), new ReliableStorage[Any]()))
+    val cluster = Cluster.fromNodes(raftNodes)
+    // tick
+    (1 to 500).foreach(cluster.tick)
+    // new leader should be elected by now
+    val leaders = raftNodes.filter(_.behaviour.isInstanceOf[Behaviours.Leader])
+    assert (leaders.size === 1)
+    // send append to leader
+    val input = new ReliableChannel()
+    val leader = leaders.head
+    var currentTime = 501
+
+    for {i <- 1 to 4}
+    {
+       leader.input.send(input, Messages.ClientPut.Request("babaka" + i))
+      // expect Reply message with success
+      val trecv = (currentTime to 1000).find(t => {
+        cluster.tick(t)
+        val msg = input.receive()
+        Console.println(msg)
+        msg.exists(_.msg.isInstanceOf[Messages.ClientPut.Reply])
+      })
+      // should be on majority of servers now
+      val replicasCount = raftNodes.count(n => n.storage.last.get.asInstanceOf[RaftLogEntry].value == ("babaka" + i))
+      assert(replicasCount >= raftNodes.size / 2 + 1)
+      // the reply messages should be there at some point
+      assert(trecv.isDefined)
+      currentTime = trecv.get
+    }
+    // storage should be 5
+    assert (raftNodes.forall(_.storage.size === 5)) // we have a placeholder in there, so 4 + 1
+  }
 }
