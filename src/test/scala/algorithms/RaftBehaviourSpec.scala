@@ -58,6 +58,9 @@ class RaftBehaviourSpec extends FlatSpec with Matchers {
       Console.println(msg)
       msg.exists(_.msg.isInstanceOf[Messages.ClientPut.Reply])
     })
+    if (trecv.isDefined) {
+      //(trecv.get to 1000).foreach(cluster.tick)
+    }
     // should be on majority of servers now
     val replicasCount = raftNodes.count(n => n.storage.last.get.asInstanceOf[RaftLogEntry].value == "babaka")
     assert (replicasCount >= raftNodes.size / 2 + 1)
@@ -98,6 +101,6 @@ class RaftBehaviourSpec extends FlatSpec with Matchers {
       currentTime = trecv.get
     }
     // storage should be 5
-    assert (raftNodes.forall(_.storage.size === 5)) // we have a placeholder in there, so 4 + 1
+    raftNodes.foreach(n => assert (n.storage.size === 5)) // we have a placeholder in there, so 4 + 1
   }
 }

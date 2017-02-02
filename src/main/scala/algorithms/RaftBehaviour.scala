@@ -16,6 +16,7 @@ object RaftBehaviour {
                          leaderCommit:Int) extends Message
       case class Reply(senderId:Node.NodeId,
                        term:Int,
+                       matchIndex:Int,
                        success:Boolean) extends Message
 
     }
@@ -86,7 +87,7 @@ object RaftBehaviour {
           prevEntry.get.term != req.prevLogTerm
         ) {
           node.log(s"AppendEntries false req.term is ${req.term}, our term is ${state.currentTerm}, prev entry term ${prevEntry}, req.prevLogTerm is ${req.prevLogTerm}")
-          sender.send(node.input, Messages.AppendEntries.Reply(node.nodeId, state.currentTerm, success = false))
+          sender.send(node.input, Messages.AppendEntries.Reply(node.nodeId, state.currentTerm, 0, success = false))
           false
         } else {
           // 3. if an existing entry conflicts with a new (same index, different terms)
@@ -101,7 +102,9 @@ object RaftBehaviour {
           // 5. If leader commit > commitIndex
           if (req.leaderCommit > state.commitIndex)
             state.commitIndex = Math.min(req.leaderCommit, state.commitIndex)
-          sender.send(node.input, Messages.AppendEntries.Reply(node.nodeId, state.currentTerm, success = true))
+          sender.send(node.input, Messages.AppendEntries.Reply(node.nodeId, state.currentTerm,
+            node.storage.size - 1, success = true))
+          node.log(s"AppendEntries ${req.entries} true, now storage size is ${node.storage.size}")
           true
         }
       }
@@ -197,7 +200,7 @@ object RaftBehaviour {
       }
 
       override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
-        case Messages.Vote.Reply(term, isVoteGranted) => {
+        case Messages.Vote.Reply(term, isVoteGranted) =>
           if (isVoteGranted) {
             node.logWithTime(time, s"received yes vote")
             _repliesToReceive -= 1
@@ -211,23 +214,20 @@ object RaftBehaviour {
             node.logWithTime(time, s"becoming a leader")
             node.behaviour = new Leader(state, raftNodes)
           }
-        }
 
-        case req:Messages.AppendEntries.Request => {
+        case req:Messages.AppendEntries.Request =>
           if (req.term >= state.currentTerm) {
             handleAppendEntries(sender, node, req)
             state.currentTerm = req.term
             node.behaviour = new Follower(raftNodes, state)
           }
-        }
 
-        case req:Messages.Vote.Request => {
+        case req:Messages.Vote.Request =>
           if (handleVote(sender, node, state, req)) {
             state.currentTerm = req.term.max(state.currentTerm)
             node.behaviour = new Follower(raftNodes, state)
           }
           leaderHeartbeating.voted(time)
-        }
       }
 
       override def tick(time: Int, node: Node): Unit = {
@@ -252,21 +252,23 @@ object RaftBehaviour {
           }
 
         case req:Messages.ClientPut.Request => {
-          node.logWithTime(time, s"client put value ${req.value}")
+          node.logWithTime(time, s"client put value ${req.value}, going to append it to followers at index ${node.storage.size}, current commit index is ${state.commitIndex}")
           node.storage.put(RaftLogEntry(req.value, state.currentTerm))
           clientRequests = ClientRequest(node.storage.size - 1, sender)::clientRequests
+          matchIndex = matchIndex.updated(node.nodeId, matchIndex.getOrElse(node.nodeId, 0) + 1)
         }
 
         case req:Messages.AppendEntries.Reply =>
           if (req.term <= state.currentTerm) {
-            if (req.success) { // if it was due to log inconsistancy
+            if (req.success) { // else it was due to log inconsistancy
               // update match index and nextIndex
-              matchIndex = matchIndex.updated(req.senderId, nextIndex(req.senderId))
-              nextIndex = nextIndex.updated(req.senderId, node.storage.size.min(nextIndex(req.senderId) + 1))
+              matchIndex = matchIndex.updated(req.senderId, req.matchIndex)
+              nextIndex = nextIndex.updated(req.senderId, (nextIndex(req.senderId) + 1).min(matchIndex(req.senderId) + 1))
+              node.logWithTime(time, s"match index is ${matchIndex}")
               // update state.commitIndex
               if (state.commitIndex != node.storage.size - 1) {
-                val oldCommitIndex = state.commitIndex
                 node.log(s"updating ${state.commitIndex}, as not equal to last entry ${node.storage.size - 1}")
+                val oldCommitIndex = state.commitIndex
                 state.commitIndex = (state.commitIndex until node.storage.size).maxBy(
                   i => {
                     val majority = raftNodes.size / 2 + 1
@@ -278,13 +280,14 @@ object RaftBehaviour {
                       state.commitIndex
                     }
                   })
+                if (oldCommitIndex != state.commitIndex)
+                  node.logWithTime(time, s"updated commit index from ${oldCommitIndex} to ${state.commitIndex}")
                 // send replies to requests
                 val (completedRequests, newClientRequests) = clientRequests.partition(r => r.logIdx <= state.commitIndex)
                 clientRequests = newClientRequests
                 completedRequests.foreach(r => r.callback.send(node.input, Messages.ClientPut.Reply(true)))
-                node.log(s"comleting requests ${completedRequests}")
+                node.logWithTime(time, s"completing requests ${completedRequests}")
               }
-              node.logWithTime(time, s"update commit index to ${state.commitIndex}")
             } else {
               node.logWithTime(time, s"resync node ${req.senderId} as its log was inconsistent at index ${nextIndex(req.senderId)}")
               nextIndex = nextIndex.updated(req.senderId, nextIndex(req.senderId) - 1)
@@ -307,9 +310,7 @@ object RaftBehaviour {
             state.votedFor = None
             node.behaviour = new Follower(raftNodes, state)
             handleAppendEntries(sender, node, req)
-          } else {
-            sender.send(node.input, Messages.AppendEntries.Reply(node.nodeId, state.currentTerm, success = false))
-          }
+          } else sender.send(node.input, Messages.AppendEntries.Reply(node.nodeId, state.currentTerm, 0, success = false))
         }
       }
 
