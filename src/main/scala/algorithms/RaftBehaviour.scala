@@ -37,8 +37,8 @@ object RaftBehaviour {
 
   object Behaviours {
     object Timeouts {
-      val leaderElection = 100
-      val leaderElectionRandomization = 20
+      val leaderElection = 70
+      val leaderElectionRandomization = 25
       val heartbeating = 5
     }
 
