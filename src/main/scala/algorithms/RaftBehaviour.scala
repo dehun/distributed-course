@@ -86,15 +86,18 @@ object RaftBehaviour {
           prevEntry.isEmpty ||
           prevEntry.get.term != req.prevLogTerm
         ) {
-          node.log(s"AppendEntries false req.term is ${req.term}, our term is ${state.currentTerm}, prev entry term ${prevEntry}, req.prevLogTerm is ${req.prevLogTerm}")
+          node.log(s"AppendEntries false req.term is ${req.term}, our term is ${state.currentTerm}, prev entry term ${prevEntry}, req.prevLogTerm is ${req.prevLogTerm}, storage is ${node.storage.asList.map(_.asInstanceOf[RaftLogEntry])}")
           sender.send(node.input, Messages.AppendEntries.Reply(node.nodeId, state.currentTerm, 0, success = false))
           false
         } else {
           // 3. if an existing entry conflicts with a new (same index, different terms)
-          for {ours <- node.storage.get(req.leaderCommit).collect({case a:RaftLogEntry => a})} {
-            if (ours.term != req.term) {
-              node.log(s"detected log inconsistency, shrinking storage to leader commit ${req.leaderCommit}")
+          for {ours <- node.storage.get(req.prevLogIndex + 1).collect({case a:RaftLogEntry => a})} {
+            if (ours.term != req.term) { // TODO: here
+              node.log(s"detected log inconsistency ours term ${ours} != theirs ${req.term}, shrinking storage to leader commit ${req.leaderCommit}")
               node.storage.shrinkRight(req.leaderCommit + 1)
+              node.log(s"storage now is ${node.storage.asList.map(_.asInstanceOf[RaftLogEntry])}")
+              sender.send(node.input, Messages.AppendEntries.Reply(node.nodeId, state.currentTerm, 0, success = false))
+              return false
             }
           }
           // 4. Append new entries
@@ -129,7 +132,7 @@ object RaftBehaviour {
     class Follower(val raftNodes:Set[Node.NodeId],
                    val state:CommonState = new CommonState()) extends NodeBehaviour with RaftBehavior {
       val leaderHeartbeating = new LeaderHeartbeating(Random.nextInt(Timeouts.leaderElectionRandomization))
-      val lastLeader:Option[Node.NodeId] = None
+      var lastLeader:Option[Node.NodeId] = None
 
 
       override def init(node: Node): Unit = {
@@ -144,6 +147,7 @@ object RaftBehaviour {
       override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match  {
         case req:Messages.AppendEntries.Request => {
           if (handleAppendEntries(sender, node, req)) // TODO: double check this
+            lastLeader = Some(req.leaderId)
             leaderHeartbeating.sawLeader(time)
           if (req.term > state.currentTerm) {
             state.currentTerm = req.term
@@ -160,8 +164,26 @@ object RaftBehaviour {
             leaderHeartbeating.voted(time)
         }
 
-        case _:Messages.AppendEntries.Reply => {} // TODO: double check
-        case _:Messages.Vote.Reply => {}          // TODO: double check
+        case req:Messages.AppendEntries.Reply =>
+          if (state.currentTerm < req.term) {
+            state.votedFor = None
+            req.term.max(state.currentTerm)
+          }
+
+        case req:Messages.Vote.Reply =>
+          if (state.currentTerm < req.term) {
+            state.votedFor = None
+            req.term.max(state.currentTerm)
+          }
+
+        case req:Messages.ClientPut.Request => {
+          // forward to leader if there are one
+          if (lastLeader.isDefined) {
+            node.cluster.get.nodes(lastLeader.get).input.send(node.input, req)
+          } else {
+            sender.send(node.input, Messages.ClientPut.Reply(false))
+          }
+        }
       }
 
       override def tick(time: Int, node: Node): Unit = {
@@ -177,7 +199,6 @@ object RaftBehaviour {
                     override  val raftNodes:Set[Node.NodeId]) extends NodeBehaviour with RaftBehavior {
       private var _tick = (time:Int, node:Node) => _onBecome(time, node)
       private var _repliesToReceive = raftNodes.size / 2 + 1 - 1 // self
-      // WTF we need leader heartbeating here?
       private val leaderHeartbeating = new LeaderHeartbeating(Random.nextInt(Timeouts.leaderElectionRandomization))
 
       private def _onBecome(time:Int, node:Node):Unit = {
@@ -211,7 +232,7 @@ object RaftBehaviour {
             node.behaviour = new Follower(raftNodes, state)
           }
           if (_repliesToReceive == 0) {
-            node.logWithTime(time, s"becoming a leader")
+            node.logWithTime(time, s"becoming a leader with storage ${node.storage.asList.map(_.asInstanceOf[RaftLogEntry])}")
             node.behaviour = new Leader(state, raftNodes)
           }
 
@@ -228,6 +249,9 @@ object RaftBehaviour {
             node.behaviour = new Follower(raftNodes, state)
           }
           leaderHeartbeating.voted(time)
+
+        case _:Messages.ClientPut.Request =>
+          sender.send(node.input, Messages.ClientPut.Reply(success = false))
       }
 
       override def tick(time: Int, node: Node): Unit = {
@@ -256,6 +280,7 @@ object RaftBehaviour {
           node.storage.put(RaftLogEntry(req.value, state.currentTerm))
           clientRequests = ClientRequest(node.storage.size - 1, sender)::clientRequests
           matchIndex = matchIndex.updated(node.nodeId, matchIndex.getOrElse(node.nodeId, 0) + 1)
+          nextIndex = nextIndex.updated(node.nodeId, nextIndex(node.nodeId) + 1)
         }
 
         case req:Messages.AppendEntries.Reply =>
@@ -263,8 +288,10 @@ object RaftBehaviour {
             if (req.success) { // else it was due to log inconsistancy
               // update match index and nextIndex
               matchIndex = matchIndex.updated(req.senderId, req.matchIndex)
-              nextIndex = nextIndex.updated(req.senderId, (nextIndex(req.senderId) + 1).min(matchIndex(req.senderId) + 1))
+              nextIndex = nextIndex.updated(req.senderId, (nextIndex(req.senderId) + 1)
+                .min(matchIndex(req.senderId) + 1).min(node.storage.size))
               node.logWithTime(time, s"match index is ${matchIndex}")
+              node.logWithTime(time, s"next index is ${nextIndex}")
               // update state.commitIndex
               if (state.commitIndex != node.storage.size - 1) {
                 node.log(s"updating ${state.commitIndex}, as not equal to last entry ${node.storage.size - 1}")
@@ -327,7 +354,7 @@ object RaftBehaviour {
           lastHeartbeatSent = Some(time)
           raftNodes.filterNot(_ == node.nodeId).foreach(
             targetNode => {
-              node.logWithTime(time, s"syncing node ${targetNode} with index ${nextIndex(targetNode)}")
+              node.logWithTime(time, s"syncing node ${targetNode} with index ${nextIndex(targetNode)} and storage ${node.storage.asList.map(_.asInstanceOf[RaftLogEntry])}")
               val prevIndex = nextIndex(targetNode) - 1
               val prevEntry = node.storage.get(prevIndex).get.asInstanceOf[RaftLogEntry]
               val entries = (prevIndex + 1 until node.storage.size).map(
@@ -338,12 +365,6 @@ object RaftBehaviour {
               node.cluster.get.nodes(targetNode).input.send(node.input, heartbeatMsg)
             })
         }
-      }
-    }
-
-    class Client(backendNodes:List[Node], private var valuesToStore:Stream[Int]) extends NodeBehaviour {
-      override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
-        case _ => ???
       }
     }
   }

@@ -65,9 +65,6 @@ class RaftBehaviourSpec extends FlatSpec with Matchers {
       Console.println(msg)
       msg.exists(_.msg.isInstanceOf[Messages.ClientPut.Reply])
     })
-    if (trecv.isDefined) {
-      //(trecv.get to 1000).foreach(cluster.tick)
-    }
     // should be on majority of servers now
     val replicasCount = raftNodes.count(n => n.storage.last.get.asInstanceOf[RaftLogEntry].value == "babaka")
     assert (replicasCount >= raftNodes.size / 2 + 1)
@@ -147,5 +144,42 @@ class RaftBehaviourSpec extends FlatSpec with Matchers {
     }
     // storage should be 5
     raftNodes.foreach(n => assert (n.storage.size === 11)) // we have a placeholder in there, so 4 + 1
+  }
+
+  it should "store single pushed value after leader failure replicating previous one" in {
+    val raftNodeNames = (1 to 5).map(n => s"raft_${n}").toSet
+    val raftNodes = raftNodeNames.map(n =>
+      new Node(n, newChannelFromHell(), new Behaviours.Follower(raftNodeNames), new ReliableStorage[Any]()))
+    val majorityCount = raftNodes.size / 2 + 1
+    val cluster = Cluster.fromNodes(raftNodes)
+    // tick
+    (1 to 500).foreach(cluster.tick)
+    // new leader should be elected by now
+    val leaders = raftNodes.filter(_.behaviour.isInstanceOf[Behaviours.Leader])
+    assert (leaders.size === 1)
+    // send append to leader
+    val input1 = new ReliableChannel()
+    val input2 = new ReliableChannel()
+    val leader = leaders.head
+    leader.input.send(input1, Messages.ClientPut.Request("babaka"))
+    cluster.tick(501)
+    // and fail leader
+    leader.behaviour = new DeadNodeBehaviour()
+    // wait for new leader to emerge
+    val newLeaderTime = (501 to 1000).find(t => {
+      cluster.tick(t)
+      raftNodes.exists(_.behaviour.isInstanceOf[Behaviours.Leader])
+    })
+    assert (newLeaderTime.isDefined)
+    // and send another one request
+    raftNodes.find(_.behaviour.isInstanceOf[Behaviours.Leader])
+      .head.input.send(input2, Messages.ClientPut.Request("sobaka"))
+    // wait for request to be finished
+    val replyTime = (newLeaderTime.get to 2000).find(t => {
+      cluster.tick(t)
+      input2.receive().isInstanceOf[Messages.ClientPut.Reply]}
+    )
+    // we should get sobaka at majority now
+    assert (raftNodes.count(_.storage.asList.map(_.asInstanceOf[RaftLogEntry]).last.value == "sobaka") >= majorityCount)
   }
 }
