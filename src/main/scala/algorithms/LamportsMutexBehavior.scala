@@ -18,7 +18,7 @@ object LamportsMutexBehavior {
 
     override def onMessage(sender: Channel, msg: Message, node: Node, time: Int): Unit = msg match {
       case lmmsg:Messages.LmMessage => {
-        ourLmstamp = Math.max(ourLmstamp, lmmsg.lmstamp) + 1
+        //ourLmstamp = Math.max(ourLmstamp, lmmsg.lmstamp) + 1
         Console.println(s"${node.nodeId} at time ${time} got ${lmmsg.op} with stamp ${lmmsg.lmstamp}, our lmstamp is ${ourLmstamp}")
         onLmMessage(sender, lmmsg, node, time)
       }
